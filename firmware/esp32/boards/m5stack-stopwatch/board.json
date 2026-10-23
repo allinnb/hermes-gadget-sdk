@@ -1,0 +1,6 @@
+{
+  "title": "M5Stack StopWatch",
+  "summary": "Round 466x466 AMOLED watch with touch, analog microphone, speaker and three rim buttons. Blue is TALK, yellow is CANCEL/navigation, and red controls the screen or opens Settings when held. Experimental port.",
+  "docs": "docs/hardware.md#m5stack-stopwatch",
+  "ready_made": true
+}

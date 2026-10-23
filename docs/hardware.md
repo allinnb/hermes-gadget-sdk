@@ -211,6 +211,37 @@ Before relying on the port, run the [physical checklist](hardware-validation.md)
 
 References: [M5Stack hardware and recovery instructions](https://docs.m5stack.com/en/core/CoreS3), [Espressif board definitions](https://github.com/espressif/esp-bsp/tree/master/bsp/m5stack_core_s3), [AW9523 registers](https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/docs/products/core/CoreS3/AW9523B-EN.pdf), and [AXP2101 registers](https://files.waveshare.com/wiki/common/X-power-AXP2101_SWcharge_V1.0.pdf). See [README](../README.md#license) for driver licenses and the adapted ILI9342E table's notice.
 
+## M5Stack StopWatch
+
+Use `m5stack-stopwatch` for the M5Stack StopWatch with ESP32-S3R8, 16 MB flash and 8 MB octal PSRAM. This is an experimental port; use its exact image and keep a USB recovery path available.
+
+| Part | Connection |
+|---|---|
+| CO5300 466×466 round AMOLED | QSPI CS 39, clock 40, D0–D3 41/42/46/45; column offset 6; reset and 3.3 V supply through M5IOE1 |
+| CST820 touch | Shared I2C at 0x15; reset through M5IOE1; polled |
+| I2C | SDA 47, SCL 48, 400 kHz |
+| ES8311 microphone and speaker | MCLK 18, BCLK 17, WS 15, DOUT 21, DIN 16; AW8737A enable through M5IOE1 |
+| M5IOE1 / M5PM1 | I2C 0x4F / 0x6E; M5PM1 IRQ is active-low on GPIO 12 |
+| Blue / yellow keys | Active-low GPIO 1 TALK / GPIO 2 CANCEL and Settings navigation |
+| Red key | Read from M5PM1; short press sleeps or wakes the screen; hold 1.5 seconds to open or close Settings |
+
+Hold the blue key to talk and release it to send. The yellow key cancels in normal use and advances through Settings; the blue key confirms a Settings item. A red-key short press turns the screen off or on while the device remains running. Holding red for about 1.5 seconds opens or closes Settings; the PMIC retains its longer emergency power behavior. The title-bar hold and touch gestures remain available.
+
+The M5IOE1 adapter sequences the display, touch and audio supplies and resets before those peripherals start. The M5PM1 adapter reports raw battery voltage and external-power presence and provides local software shutdown; battery percentage and charge state are not claimed. The amplifier currently remains enabled after startup because the shared codec port accepts only a native GPIO PA control.
+
+```bash
+cd firmware/esp32
+pio run -e m5stack-stopwatch -t upload -t monitor
+```
+
+For ESP-IDF, use `SDKCONFIG_DEFAULTS="sdkconfig.defaults;boards/m5stack-stopwatch/sdkconfig.defaults"` with a separate build directory and sdkconfig. The USB Serial/JTAG port carries flashing and the console.
+
+### First flash: what to check
+
+Confirm the log identifies `m5stack-stopwatch`, 16 MB flash and octal PSRAM; the display is upright with correct colours; I2C devices 0x15, 0x18, 0x4F and 0x6E answer; microphone, speaker and touch initialize; and every blue, yellow and red key action works. Then complete the [physical checklist](hardware-validation.md), including a real voice turn, audio interruption, Wi-Fi recovery, battery-only behavior, software shutdown, OTA/rollback and a two-hour run.
+
+Register and pin facts follow the [Muse Gadget SDK StopWatch board support](https://github.com/facebookincubator/muse-gadget-sdk/tree/e6fe5174092702ffddae6f90759a38d55a4ebae1) (Apache 2.0) and M5Stack's published device documentation. Only hardware facts and behavior are reused; this driver is an original ESP-IDF adapter. See [NOTICE](../NOTICE) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
 ## ESP32-S3-Touch-AMOLED-1.75C
 
 Use `esp32s3-touch-amoled-175c` for SKUs 33691/33692, the enclosed model with 32 MB flash and 8 MB octal PSRAM. This is an experimental port. Use its exact image; the 1.75 model's image has different pins.

@@ -218,3 +218,12 @@ register layout are hardware facts referenced from Elecrow V1.1 commit
 6c7c851f3105349dc24b12ad058655ba6afa98ee. See the pinned URLs in
 THIRD_PARTY_NOTICES.md. The Elecrow repository has no license file; only those
 hardware facts are used and no Elecrow source code is copied.
+
+The M5Stack StopWatch pin map, M5IOE1 and M5PM1 register facts, supply/reset
+sequence, and physical-key behavior in firmware/esp32/main/board.cpp,
+port_m5ioe1.cpp and port_m5pm1.cpp were cross-checked against Meta's Muse Gadget
+SDK at commit e6fe5174092702ffddae6f90759a38d55a4ebae1,
+https://github.com/facebookincubator/muse-gadget-sdk, Apache License 2.0.
+Only hardware facts and behavior are reused; the Hermes Gadget drivers are an
+original ESP-IDF adapter. The existing LICENSES/Apache-2.0.txt supplies the
+license text.

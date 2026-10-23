@@ -14,6 +14,10 @@
 #include "hg/touch.hpp"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+#include "port_m5ioe1.hpp"
+#include "port_m5pm1.hpp"
+#endif
 #if SOC_MIPI_DSI_SUPPORTED
 #include "esp_ldo_regulator.h"
 #endif
@@ -68,6 +72,9 @@ hgp::AxpPower g_power;
 hgp::LatchPower g_latch_power;
 hgp::CoreS3Board g_cores3;
 hgp::PhoneLink g_phone;
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+hgp::M5PM1Power g_m5pm1_power;
+#endif
 #endif
 hgp::Buttons g_buttons;
 hgp::Wifi g_wifi;
@@ -315,6 +322,17 @@ extern "C" void app_main(void) {
 #endif
   // GPIO45/46 belong to VDD_IO_5 on the P4; acquire LDO4 before creating I2C0.
   i2c_master_bus_handle_t i2c_bus = io_rail_ready ? hgp::i2c::bus(board.i2c) : nullptr;
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  // M5IOE1 controls supply + reset for AMOLED, touch and audio.
+  // Must run before amoled/touch/codec begin(). M5PM1 owns the red power key.
+  if (i2c_bus && hgp::m5ioe1().begin(i2c_bus) != ESP_OK)
+    ESP_LOGE(TAG, "M5IOE1 init failed — display/touch/audio may not work");
+  if (i2c_bus && g_m5pm1_power.begin(i2c_bus)) {
+    hal.power = &g_m5pm1_power;
+  } else {
+    ESP_LOGE(TAG, "M5PM1 init failed — red key and power telemetry unavailable");
+  }
+#endif
   const bool peripherals_ready = io_rail_ready && (!board.cores3 || g_cores3.begin(i2c_bus)) &&
       (!board.expander_reset.mask || hgp::tca9554_reset(i2c_bus, board.expander_reset));
   if (board.cores3 && peripherals_ready)
@@ -492,6 +510,9 @@ extern "C" void app_main(void) {
       esp_restart();
     }
     g_buttons.poll(app);
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+    g_m5pm1_power.poll(app, g_system.now_ms());
+#endif
     g_wifi.tick(app, g_system.now_ms());
     if (g_gestures) g_gestures->tick(g_system.now_ms());
     app.tick();

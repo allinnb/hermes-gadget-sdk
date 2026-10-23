@@ -48,6 +48,8 @@ namespace {
 #define HG_BOARD_NAME "waveshare-esp32-p4-touch-lcd-3.4c"
 #elif CONFIG_HG_BOARD_WS_ESP32S3_LCD_154
 #define HG_BOARD_NAME "waveshare-esp32s3-lcd-154"
+#elif CONFIG_HG_BOARD_M5STACK_STOPWATCH
+#define HG_BOARD_NAME "m5stack-stopwatch"
 #elif CONFIG_HG_BOARD_ESP32_CYD
 #define HG_BOARD_NAME "esp32-2432s028-cyd"
 #else
@@ -873,6 +875,70 @@ BoardConfig make() {
   b.buttons = {35, -1, -1, -1};
   b.talk_label = "BOOT";
   b.cancel_label = "Swipe down";
+  return b;
+}
+#elif CONFIG_HG_BOARD_M5STACK_STOPWATCH
+// M5Stack StopWatch: round 466x466 CO5300 AMOLED (QSPI), CST820 touch,
+// ES8311 duplex codec (analog mic into ADC), AW8737A amplifier.
+// M5PM1 PMIC (0x6E) + M5IOE1 I/O expander (0x4F) on the shared I2C bus.
+// Power sequencing (supply + reset pulses) handled by M5IOE1::begin()
+// which is called before amoled/touch/codec init in main.cpp.
+// Pins: facebookincubator/muse-gadget-sdk board_m5stack_stopwatch.c
+BoardConfig make() {
+  BoardConfig b{};
+  b.name = kBoardName;
+
+  // AMOLED: CO5300 466x466, QSPI. rst = -1: driven by M5IOE1 PYG5.
+  b.amoled.enabled  = true;
+  b.amoled.panel    = AmoledPanel::Co5300_466;
+  b.amoled.width    = 466;
+  b.amoled.height   = 466;
+  b.amoled.round    = true;
+  b.amoled.gap_x    = 6;   // controller RAM 480 wide; glass starts at col 6
+  b.amoled.cs       = 39;
+  b.amoled.sclk     = 40;
+  b.amoled.d0       = 41;
+  b.amoled.d1       = 42;
+  b.amoled.d2       = 46;
+  b.amoled.d3       = 45;
+  b.amoled.rst      = -1;  // M5IOE1 PYG5 handles reset
+  b.amoled.qspi_mhz = 40;
+
+  // Shared I2C: GPIO47 SDA, GPIO48 SCL
+  b.i2c = {47, 48, 400000};
+
+  // Audio: ES8311 duplex (analog electret mic into codec ADC)
+  b.codec.enabled      = true;
+  b.codec.mclk         = 18;
+  b.codec.bclk         = 17;
+  b.codec.ws           = 15;
+  b.codec.dout         = 21;
+  b.codec.din          = 16;
+  b.codec.pa           = -1;  // AW8737A enable is M5IOE1 PYG10, not an ESP32 GPIO
+  b.codec.speaker      = SpeakerCodec::Es8311;
+  b.codec.mic          = MicCodec::Es8311;  // analog mic -> ES8311 ADC
+  b.codec.speaker_pa   = false;  // M5IOE1 keeps the amplifier enabled
+  b.codec.amp_supply_v = 3.3f;
+
+  // Touch: CST820 at 0x15 (same report as CST816). rst = -1: M5IOE1 PYG4.
+  b.touch.enabled    = true;
+  b.touch.controller = TouchController::Cst816;
+  b.touch.addr       = 0x15;
+  b.touch.rst        = -1;  // M5IOE1 PYG4 handles reset
+  b.touch.int_gpio   = -1;  // INT not wired to ESP32 GPIO; driver polls
+  b.touch.width      = 466;
+  b.touch.height     = 466;
+  b.touch.ppi        = 266;
+
+  // Official controls: blue BtnB is active-low GPIO1 and PTT; yellow BtnA is
+  // active-low GPIO2 and serves as cancel / next item. The red key is internal
+  // to M5PM1; GPIO12 is only its IRQ, so port_m5pm1 polls register 0x48.
+  b.buttons = {1, 2, -1, -1};
+  b.talk_label = "Blue";
+  b.cancel_label = "Yellow";
+
+  // Red short press toggles the display; hold 1.5 s opens/closes Settings.
+  // No GPIO latch: power-off goes through M5PM1 PMIC SYS_CMD
   return b;
 }
 #elif CONFIG_HG_BOARD_ESP32_CYD

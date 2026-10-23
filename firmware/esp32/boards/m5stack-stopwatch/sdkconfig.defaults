@@ -1,0 +1,40 @@
+# boards/m5stack-stopwatch/sdkconfig.defaults
+# M5Stack StopWatch: ESP32-S3R8, 16 MB flash, 8 MB OPI PSRAM.
+# Cross-checked against muse-gadget-sdk board_m5stack_stopwatch.c and
+# M5Unified sdkconfig for the StopWatch target.
+
+# ── Board selection ───────────────────────────────────────────────────────────
+CONFIG_HG_BOARD_M5STACK_STOPWATCH=y
+
+# ── Flash ─────────────────────────────────────────────────────────────────────
+# CONFIG_ESPTOOLPY_FLASHSIZE_4MB is not set
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+# (partitions.csv is inherited from the root sdkconfig.defaults)
+
+# ── PSRAM: OPI 8 MB (ESP32-S3R8) ─────────────────────────────────────────────
+CONFIG_ESP32S3_SPIRAM_SUPPORT=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+
+# ── Console: USB-Serial-JTAG (no dedicated UART pins needed) ─────────────────
+# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# ── FreeRTOS tick rate (needed for light-sleep compatibility) ─────────────────
+CONFIG_FREERTOS_HZ=1000
+
+# ── Wi-Fi ─────────────────────────────────────────────────────────────────────
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+
+# ── LVGL / display ────────────────────────────────────────────────────────────
+# CO5300 QSPI AMOLED uses the esp_lcd_co5300 managed component.
+# No additional sdkconfig knobs needed beyond what the root sdkconfig.defaults sets.
+
+# ── Audio ─────────────────────────────────────────────────────────────────────
+# ES8311 I2C address is the SDK default (0x18 = ES8311_CODEC_DEFAULT_ADDR).
+# No extra sdkconfig needed.
