@@ -7,7 +7,7 @@ export const groups = [
   ["Get started", [["getting-started", "Choose your path"], ["supported-hardware", "Supported hardware"], ["desktop", "Try the simulator"], ["setup-board", "Set up a board"], ["linux", "Run a Linux gadget"], ["connect-hermes", "Connect Hermes"]]],
   ["Use your gadget", [["using-gadget", "Talk, type, and interrupt"], ["tailscale-funnel", "Connect from another network"], ["troubleshooting", "Fix a problem"], ["simulator", "Simulator controls"]]],
   ["Build with the SDK", [["development", "Development and tests"], ["porting", "Add a board or action"], ["home-automation", "Home Assistant and MQTT"], ["faces", "Customize the face"], ["hardware", "Hardware and wiring"]]],
-  ["Reference", [["hardware-validation", "Hardware verification"], ["protocol", "Protocol"], ["architecture", "Architecture"], ["hermes-integration", "Hermes integration"]]],
+  ["Reference", [["hardware-validation", "Hardware verification"], ["protocol", "Protocol"], ["architecture", "Architecture"], ["hermes-integration", "Hermes integration"], ["packaging-qa", "StopWatch packaging Q&A"]]],
 ];
 const pages = new Set(groups.flatMap(([, entries]) => entries.map(([id]) => id)));
 const escape = text => String(text).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"})[c]);

@@ -7,7 +7,7 @@
 
 ## 1. 固件源码在哪？改了哪些文件？
 
-**源码仓库：** `https://github.com/allinnb/hermes-gadget-sdk`（private，后期公开）
+**源码仓库：** <https://github.com/allinnb/hermes-gadget-sdk>（public）
 
 本次移植在上游 `Adolanium/hermes-gadget-sdk` 的完整历史基础上新增 StopWatch
 支持，而不是另建独立包，便于后续向上游提 PR。
