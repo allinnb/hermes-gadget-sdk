@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.1
+
+Hermes Gadget 0.3.1 adds experimental M5Stack StopWatch support, including its round AMOLED display, touch controller, ES8311 audio path, M5IOE1 peripheral sequencing, M5PM1 power key, and physical button interactions. It also includes the other firmware and plugin improvements listed below that landed after 0.3.0.
+
 ### Hardware and setup
 
 - Experimental support for the M5Stack StopWatch: round 466×466 CO5300 QSPI AMOLED, CST820 touch, an ES8311 analog microphone and speaker codec, AW8737A amplifier, M5IOE1-controlled peripheral supplies and resets, and M5PM1 power management. The blue key is TALK, the yellow key is CANCEL/navigation, and the red PMIC key sleeps or wakes the screen on a short press and opens or closes Settings after a 1.5-second hold. A physical smoke test on one unit covered boot, display, touch/controller discovery, both GPIO keys, red-key screen sleep/wake and Settings entry/exit, and codec initialization; Wi-Fi pairing, voice turns, battery operation, OTA/rollback, and the full checklist remain unverified. The port therefore remains experimental. Hardware register and pin facts are referenced from the Apache-2.0-licensed Muse Gadget SDK and M5Stack documentation.
