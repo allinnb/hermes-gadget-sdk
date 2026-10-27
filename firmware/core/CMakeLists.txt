@@ -9,8 +9,10 @@ set(HG_CORE_SOURCES
     src/canvas.cpp
     src/crypto.cpp
     src/font5x7.cpp
+    src/font_cjk12.cpp
     src/i18n.cpp
     src/i18n_es.cpp
+    src/i18n_zh.cpp
     src/frame_stats.cpp
     src/json.cpp
     src/mascot.cpp

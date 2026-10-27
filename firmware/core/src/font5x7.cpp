@@ -398,7 +398,9 @@ const char* const kLatin1[96] = {
 
 }  // namespace
 
-bool drawable(char32_t cp) { return (cp >= 0x20 && cp <= 0x7E) || (cp >= 0xA0 && cp <= 0xFF); }
+bool drawable(char32_t cp) {
+  return (cp >= 0x20 && cp <= 0x7E) || (cp >= 0xA0 && cp <= 0xFF) || is_cjk(cp);
+}
 
 const char* glyph(char32_t cp) {
   if (cp >= 0x20 && cp <= 0x7E) return kGlyphs[cp - 0x20];
@@ -437,6 +439,20 @@ size_t length(std::string_view s) {
 size_t prefix(std::string_view s, size_t chars) {
   size_t i = 0;
   for (size_t n = 0; n < chars && i < s.size(); ++n) next(s, i);
+  return i;
+}
+
+size_t prefix_cols(std::string_view s, int max_cols) {
+  if (max_cols <= 0) return 0;
+  size_t i = 0;
+  int cols = 0;
+  while (i < s.size()) {
+    size_t prev_i = i;
+    char32_t cp = next(s, i);
+    int c = char_columns(cp);
+    if (cols + c > max_cols) return prev_i;
+    cols += c;
+  }
   return i;
 }
 

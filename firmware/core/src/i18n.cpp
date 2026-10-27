@@ -10,6 +10,8 @@ namespace hg::i18n {
 // Translation tables, one per language other than English (i18n_<code>.cpp).
 extern const Entry kSpanish[];
 extern const size_t kSpanishCount;
+extern const Entry kChinese[];
+extern const size_t kChineseCount;
 
 namespace {
 
@@ -22,6 +24,7 @@ const char* const kEnglish[kMessageCount] = {
 const LangInfo kLangs[kLangCount] = {
     {"en", "English"},
     {"es", "Español"},
+    {"zh", "简体中文"},
 };
 
 struct Table {
@@ -32,6 +35,7 @@ struct Table {
 Table table_for(Lang lang) {
   switch (lang) {
     case Lang::Es: return {kSpanish, kSpanishCount};
+    case Lang::Zh: return {kChinese, kChineseCount};
     default: return {nullptr, 0};
   }
 }

@@ -270,7 +270,7 @@ enum class Msg : uint16_t {
 };
 constexpr size_t kMessageCount = static_cast<size_t>(Msg::Count);
 
-enum class Lang : uint8_t { En, Es, Count };
+enum class Lang : uint8_t { En, Es, Zh, Count };
 constexpr size_t kLangCount = static_cast<size_t>(Lang::Count);
 
 // One entry of a translation table.

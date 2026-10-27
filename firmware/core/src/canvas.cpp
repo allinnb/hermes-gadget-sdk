@@ -104,22 +104,37 @@ void Canvas::bitmap1(int x, int y, int w, int h, const uint8_t* bits, uint16_t c
 int Canvas::text(int x, int y, std::string_view s, int scale, uint16_t color) {
   if (scale < 1) scale = 1;
   for (size_t i = 0; i < s.size();) {
-    const char* g = font::glyph(font::next(s, i));
-    for (int row = 0; row < font::kGlyphHeight; ++row) {
-      for (int col = 0; col < font::kGlyphWidth; ++col) {
-        if (g[row * font::kGlyphWidth + col] == '#') {
-          fill_rect(x + col * scale, y + row * scale, scale, scale, color);
+    char32_t cp = font::next(s, i);
+    if (const uint8_t* cjk = font::cjk_glyph(cp)) {
+      for (int row = 0; row < font::kCjkGlyphHeight; ++row) {
+        for (int col = 0; col < font::kCjkGlyphWidth; ++col) {
+          int bit_idx = row * font::kCjkGlyphWidth + col;
+          if ((cjk[bit_idx >> 3] >> (7 - (bit_idx & 7))) & 1) {
+            fill_rect(x + col * scale, y + row * scale, scale, scale, color);
+          }
         }
       }
+      x += font::kCjkCellWidth * scale;
+    } else {
+      const char* g = font::glyph(cp);
+      // Vertically offset ASCII slightly so it vertically aligns with CJK baseline.
+      const int y_off = 2 * scale;
+      for (int row = 0; row < font::kGlyphHeight; ++row) {
+        for (int col = 0; col < font::kGlyphWidth; ++col) {
+          if (g[row * font::kGlyphWidth + col] == '#') {
+            fill_rect(x + col * scale, y + y_off + row * scale, scale, scale, color);
+          }
+        }
+      }
+      x += font::kCellWidth * scale;
     }
-    x += font::kCellWidth * scale;
   }
   return x;
 }
 
 int Canvas::text_width(std::string_view s, int scale) {
   if (s.empty()) return 0;
-  return static_cast<int>(font::length(s)) * font::kCellWidth * scale - scale;
+  return font::columns(s) * font::kCellWidth * scale - scale;
 }
 
 int Canvas::line_height(int scale) { return font::kCellHeight * scale; }
@@ -137,11 +152,10 @@ void Canvas::blit(int x, int y, int w, int h, const uint16_t* src) {
   }
 }
 
-// Widths are in code points (font::length): a UTF-8 letter is one column.
+// Widths are in visual columns (font::columns): ASCII is 1 column, CJK is 2 columns.
 std::vector<std::string> wrap_text(std::string_view text, int max_chars) {
   std::vector<std::string> lines;
-  const size_t max = static_cast<size_t>(max_chars < 1 ? 1 : max_chars);
-  if (max_chars < 1) max_chars = 1;
+  const int max_cols = max_chars < 1 ? 1 : max_chars;
   size_t i = 0;
   while (i <= text.size()) {
     size_t nl = text.find('\n', i);
@@ -155,19 +169,28 @@ std::vector<std::string> wrap_text(std::string_view text, int max_chars) {
       std::string_view word = para.substr(p, end - p);
       p = end;
       if (word.empty()) continue;
-      while (font::length(word) > max) {
+      while (font::columns(word) > max_cols) {
         if (!line.empty()) {
           lines.push_back(line);
           line.clear();
         }
-        const size_t cut = font::prefix(word, max);
-        lines.emplace_back(word.substr(0, cut));
-        word.remove_prefix(cut);
+        const size_t cut = font::prefix_cols(word, max_cols);
+        if (cut == 0) {
+          // Force advance at least one character to prevent infinite loop.
+          size_t adv = 0;
+          font::next(word, adv);
+          lines.emplace_back(word.substr(0, adv));
+          word.remove_prefix(adv);
+        } else {
+          lines.emplace_back(word.substr(0, cut));
+          word.remove_prefix(cut);
+        }
       }
       if (word.empty()) continue;
-      const size_t words = font::length(word);
-      size_t needed = line.empty() ? words : font::length(line) + 1 + words;
-      if (needed > max) {
+      const int words_cols = font::columns(word);
+      const int line_cols = font::columns(line);
+      int needed = line.empty() ? words_cols : line_cols + 1 + words_cols;
+      if (needed > max_cols) {
         lines.push_back(line);
         line.assign(word);
       } else {

@@ -52,12 +52,12 @@ class Hash {
   uint32_t h_ = 2166136261u;
 };
 
-// Columns are code points (font::length), and cuts fall between them.
+// Columns are visual width (font::columns), and cuts fall between them.
 std::string fit(std::string_view s, int max_chars) {
   if (max_chars <= 0) return {};
-  if (static_cast<int>(font::length(s)) <= max_chars) return std::string(s);
-  if (max_chars <= 2) return std::string(s.substr(0, font::prefix(s, static_cast<size_t>(max_chars))));
-  return std::string(s.substr(0, font::prefix(s, static_cast<size_t>(max_chars - 2)))) + "..";
+  if (font::columns(s) <= max_chars) return std::string(s);
+  if (max_chars <= 2) return std::string(s.substr(0, font::prefix_cols(s, max_chars)));
+  return std::string(s.substr(0, font::prefix_cols(s, max_chars - 2))) + "..";
 }
 
 int cols_for(int width_px, int scale) { return width_px / (font::kCellWidth * scale); }
