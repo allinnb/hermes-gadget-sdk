@@ -39,6 +39,7 @@ class Board:
     scroll_buttons: bool = True
     round: bool = False  # circular panel: pixels outside the circle are not shown
     touch: bool = False  # touchscreen: hold to talk, tap to answer yes, swipe down to cancel
+    motion: bool = False  # accelerometer: face-down sleep
 
 
 BOARDS = {
@@ -57,7 +58,8 @@ BOARDS = {
     "sim-360x360-knob": Board("sim-360x360-knob", 360, 360, speaker=False, scroll_buttons=False,
                               round=True, touch=True),
     # A 1.75" round 466x466 AMOLED touch board (e.g. ESP32-S3-Touch-AMOLED-1.75): no scroll buttons.
-    "sim-466x466-round": Board("sim-466x466-round", 466, 466, scroll_buttons=False, round=True, touch=True),
+    "sim-466x466-round": Board("sim-466x466-round", 466, 466, scroll_buttons=False, round=True, touch=True,
+                               motion=True),
     # A 1.8" rectangular 368x448 AMOLED touch board (e.g. ESP32-S3-Touch-AMOLED-1.8): no scroll buttons.
     "sim-368x448": Board("sim-368x448", 368, 448, scroll_buttons=False, touch=True),
     # The 2.06" 410x502 AMOLED watch (ESP32-S3-Touch-AMOLED-2.06), as the firmware draws it:
@@ -177,6 +179,9 @@ class Simulator:
         self.restarts = 0
         self._update_buf: bytearray | None = None
         self._restart_requested = False
+        self._fixed_time: time.struct_time | None = None
+        self.face_down = False
+        self._motion_at = 0
 
         b = self.board
         self.device = NativeDevice(
@@ -184,7 +189,7 @@ class Simulator:
             server_url=url, access_token=token, mic=b.mic, speaker=b.speaker, backlight=b.backlight,
             scroll_buttons=b.scroll_buttons, library=library, button_labels=button_labels,
             round_panel=b.round, touch_screen=b.touch, update_capacity=UPDATE_SLOT_BYTES,
-            update_pending=update_pending, power=True)
+            update_pending=update_pending, power=True, motion=b.motion)
         self._round_spans = _circle_spans(b.width, b.height) if b.round else None
         self._register_actions()
 
@@ -300,6 +305,10 @@ class Simulator:
     def update_confirm(self) -> None:
         self.update_confirmed = True
 
+    def wall_time(self) -> time.struct_time | None:
+        """Local time for the clock face; set_wall_time() pins it for tests and screenshots."""
+        return self._fixed_time or time.localtime()
+
     # -- virtual peripherals -------------------------------------------------------------
 
     def _register_actions(self) -> None:
@@ -372,6 +381,10 @@ class Simulator:
         if self._wav_release_at is not None and time.monotonic() >= self._wav_release_at:
             self._wav_release_at = None
             self.release("talk")
+        if self.board.motion and self.now_ms() - self._motion_at >= 100:
+            # A steady 10 Hz accelerometer, like the board's: lying face up or face down.
+            self._motion_at = self.now_ms()
+            self.device.motion(0, 0, -1000 if self.face_down else 1000)
         self.device.tick()
         if self._restart_requested:
             self._restart_requested = False
@@ -412,6 +425,15 @@ class Simulator:
     def touch(self, touching: bool, x: int = 0, y: int = 0) -> None:
         """A touchscreen sample in screen pixels (touch boards only)."""
         self.device.touch(touching, x, y)
+
+    def set_face_down(self, down: bool) -> None:
+        """Lay the simulated board face down (or turn it back over); boards with motion only."""
+        self.face_down = down
+        self._motion_at = 0  # send the new orientation on the next step
+
+    def set_wall_time(self, when: time.struct_time | None) -> None:
+        """Pin the clock face's time (screenshots, tests); None follows the computer's clock."""
+        self._fixed_time = when
 
     def tap(self, button: str) -> None:
         self.press(button)

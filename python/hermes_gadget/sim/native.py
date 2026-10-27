@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
+import time
 from ctypes import (
     CFUNCTYPE, POINTER, Structure, c_char, c_char_p, c_double, c_int, c_size_t, c_uint8, c_uint16,
     c_uint32, c_void_p, c_int16,
@@ -20,7 +21,7 @@ from .. import paths
 
 log = logging.getLogger("hermes_gadget.sim")
 
-ABI_VERSION = 6
+ABI_VERSION = 8
 
 BUTTON_TALK, BUTTON_CANCEL, BUTTON_UP, BUTTON_DOWN = 0, 1, 2, 3
 BUTTONS = {"talk": BUTTON_TALK, "cancel": BUTTON_CANCEL, "up": BUTTON_UP, "down": BUTTON_DOWN}
@@ -43,6 +44,13 @@ _LOG = CFUNCTYPE(None, c_void_p, c_int, c_char_p)
 _ACTION = CFUNCTYPE(c_int, c_void_p, c_char_p, POINTER(c_char), c_size_t)
 _UPDATE_BEGIN = CFUNCTYPE(c_int, c_void_p, c_size_t)
 _UPDATE_WRITE = CFUNCTYPE(c_int, c_void_p, POINTER(c_uint8), c_size_t)
+
+
+class _WallTime(Structure):
+    _fields_ = [(name, c_int) for name in ("year", "month", "day", "weekday", "hour", "minute", "second")]
+
+
+_WALL_TIME_CB = CFUNCTYPE(c_int, c_void_p, POINTER(_WallTime))
 
 
 class _Host(Structure):
@@ -74,6 +82,7 @@ class _Host(Structure):
         ("update_abort", _VOID),
         ("update_restart", _VOID),
         ("update_confirm", _VOID),
+        ("wall_time", _WALL_TIME_CB),
     ]
 
 
@@ -99,6 +108,7 @@ class _Config(Structure):
         ("update_capacity", c_size_t),
         ("update_pending", c_int),
         ("has_power", c_int),
+        ("motion", c_int),
     ]
 
 
@@ -134,6 +144,7 @@ class Host(AudioHost, Protocol):
     def update_abort(self) -> None: ...
     def update_restart(self) -> None: ...
     def update_confirm(self) -> None: ...
+    def wall_time(self) -> time.struct_time | None: ...
 
 
 def _guard(default):
@@ -176,6 +187,7 @@ def load_library(path: Path | None = None) -> ctypes.CDLL:
     lib.hgsim_transport_closed.argtypes = [c_void_p, c_char_p]
     lib.hgsim_button.argtypes = [c_void_p, c_int, c_int]
     lib.hgsim_touch.argtypes = [c_void_p, c_int, c_int, c_int]
+    lib.hgsim_motion.argtypes = [c_void_p, c_int, c_int, c_int]
     lib.hgsim_mic_samples.argtypes = [c_void_p, c_char_p, c_size_t]
     lib.hgsim_submit_text.argtypes = [c_void_p, c_char_p]
     lib.hgsim_set_sensor.argtypes = [c_void_p, c_char_p, c_double]
@@ -209,7 +221,7 @@ class NativeDevice:
                  speaker_rate: int = 16000, library: Path | None = None,
                  button_labels: tuple[str, str] | None = None, round_panel: bool = False,
                  touch_screen: bool = False, update_capacity: int = 0, update_pending: bool = False,
-                 audio_host: AudioHost | None = None, power: bool = False):
+                 motion: bool = False, audio_host: AudioHost | None = None, power: bool = False):
         self._lib = load_library(library)
         self._host_obj = host
         self.width, self.height = width, height
@@ -217,7 +229,7 @@ class NativeDevice:
         self._strings += [s.encode() for s in button_labels] if button_labels else [None, None]
         self._config = _Config(width, height, int(mic), int(speaker), int(backlight), int(scroll_buttons),
                                mic_rate, speaker_rate, *self._strings, int(round_panel), int(touch_screen),
-                               update_capacity, int(update_pending), int(power))
+                               update_capacity, int(update_pending), int(power), int(motion))
         self._callbacks = self._make_callbacks(host, audio_host or host)
         self._handle = self._lib.hgsim_create(ctypes.byref(self._config), ctypes.byref(self._callbacks))
         if not self._handle:
@@ -297,6 +309,17 @@ class NativeDevice:
         def update_finish(_u):
             return int(bool(h.update_finish()))
 
+        @_guard(0)
+        def wall_time(_u, out):
+            t = h.wall_time()
+            if t is None:
+                return 0
+            w = out.contents
+            w.year, w.month, w.day = t.tm_year, t.tm_mon, t.tm_mday  # Python's tm_year is the full year
+            w.weekday = (t.tm_wday + 1) % 7  # Python counts from Monday, the core from Sunday
+            w.hour, w.minute, w.second = t.tm_hour, t.tm_min, t.tm_sec
+            return 1
+
         return _Host(
             None,
             _TRANSPORT_CONNECT(transport_connect),
@@ -325,6 +348,7 @@ class NativeDevice:
             _VOID(_guard(None)(lambda _u: h.update_abort())),
             _VOID(_guard(None)(lambda _u: h.update_restart())),
             _VOID(_guard(None)(lambda _u: h.update_confirm())),
+            _WALL_TIME_CB(wall_time),
         )
 
     # -- lifecycle --------------------------------------------------------------------
@@ -382,6 +406,10 @@ class NativeDevice:
 
     def touch(self, touching: bool, x: int = 0, y: int = 0) -> None:
         self._lib.hgsim_touch(self._handle, int(touching), int(x), int(y))
+
+    def motion(self, x_mg: int, y_mg: int, z_mg: int) -> None:
+        """An accelerometer sample in milli-g (device frame: +z out of the screen)."""
+        self._lib.hgsim_motion(self._handle, int(x_mg), int(y_mg), int(z_mg))
 
     def mic_samples(self, pcm: bytes) -> None:
         self._lib.hgsim_mic_samples(self._handle, pcm, len(pcm) // 2)

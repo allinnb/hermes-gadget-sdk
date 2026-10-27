@@ -52,6 +52,9 @@ struct DeviceProfile {
   // The touchscreen's pixels per inch, so tap targets are about 7 mm tall; 0 assumes kDefaultTouchPpi.
   uint16_t touch_ppi = 0;
   static constexpr uint16_t kDefaultTouchPpi = 200;
+  // A motion sensor feeds App::on_motion 5-25 times a second. Boards with one
+  // and a backlit display can sleep while lying face down (face_down_sleep).
+  bool motion_sensor = false;
   // Board-specific settings the console accepts besides the core ones. Changes
   // reach the port through App::on_setting_changed.
   std::vector<std::string> extra_settings;
@@ -60,6 +63,9 @@ struct DeviceProfile {
   bool frame_stats = false;
   uint32_t frame_budget_us = FrameStats::kDefaultBudgetUs;
   uint32_t frame_log_ms = 10000;
+  // Room for a face from Hermes (docs/protocol.md#faces): about 27 KB, and its message at once.
+  // Boards without PSRAM don't offer faces.
+  bool faces = true;
 };
 
 // A device-side capability the agent may invoke. `params` is a JSON-schema
@@ -93,6 +99,10 @@ class App {
   void on_transport_binary(const uint8_t* data, size_t len);
   void on_transport_closed(std::string_view reason);
   void on_button(Button button, bool pressed);
+  // Accelerometer sample in the device frame, in milli-g: +x towards the
+  // picture's right, +y towards its top, +z out of the screen. Called 5-25
+  // times a second from the thread that calls tick().
+  void on_motion(int16_t x_mg, int16_t y_mg, int16_t z_mg);
   void on_mic_samples(const int16_t* samples, size_t count);
 
   // --- device features ------------------------------------------------------
@@ -124,6 +134,8 @@ class App {
   int profile_row_hit(int x, int y) const;
   void profile_tap(int x, int y);
   const std::string& agent_profile() const { return agent_profile_; }
+  // The resting clock face is up: the time, the date and the mascot.
+  bool clock_showing() const { return clock_showing_; }
   std::string agent_profile_name() const;
   // Returns true when this input only wakes a sleeping display.
   bool wake_display();
@@ -184,6 +196,9 @@ class App {
   const std::string& device_id() const { return device_id_; }
   bool paired() const { return paired_; }
   bool online() const { return phase_ == Phase::Online; }
+  // The resting clock is on (`set clock` above 0). The port runs network time
+  // only then.
+  bool clock_enabled() const { return clock_after_ms_ > 0; }
   std::string status_json() const;
 
  private:
@@ -227,6 +242,7 @@ class App {
   void h_ota_end(const json::Value& m);
   void h_ota_abort(const json::Value& m);
   void h_profile(const json::Value& m);
+  void h_face(const json::Value& m);
   bool can_switch_profile() const;
   void set_agent_profile(const std::string& id);
   void profile_notice(std::string text);
@@ -244,7 +260,23 @@ class App {
   void settings_model();
   void stop_hardware_check();
   void power_tick();
+  // The one writer of the panel's backlight level (App::apply_backlight).
+  void apply_backlight();
+  // What keeps the panel busy for the user; the screen timeout and the resting
+  // clock share it so the two lists cannot drift.
+  bool screen_busy() const;
+  // Face-down sleep (app_power.cpp): dark and quiet while the gadget lies on
+  // its screen, ended only by turning it back over.
+  bool can_sleep_face_down() const;
+  bool face_down_sleep_enabled() const;
+  void motion_tick();
+  void enter_face_down();
+  void leave_face_down();
   json::Value power_value() const;
+  // The resting clock (app_power.cpp): it shows on an online, paired Ready
+  // screen once `clock_after_ms_` of rest has passed without anything on it.
+  bool clock_blocked() const;
+  void clock_tick();
   json::Value status_value() const;
   std::string diag_report();
   // frame timing (app_perf.cpp)
@@ -331,6 +363,7 @@ class App {
   };
   std::vector<AgentProfile> agent_profiles_;  // offered in welcome; empty = no switching
   std::string agent_profile_ = "default";
+  std::optional<mascot::Face> face_;  // agent_profile_'s, from Hermes; kept through reconnects
   // A profile.select awaiting Hermes's answer; one at a time (empty: none).
   std::string profile_pending_;
   uint32_t profile_pending_at_ = 0;
@@ -339,7 +372,7 @@ class App {
   bool lang_auto_ = false;
   std::optional<i18n::Lang> hermes_lang_;  // from the last `welcome` that named one this firmware has
   enum class Menu : uint8_t { Closed, Volume, Brightness, TalkMode, Profile, Microphone, Speaker, Display, Inputs,
-                              Info, Power, IdleTimer, PowerOff, WifiSetup, Phone, Language, Back };
+                              Info, Power, IdleTimer, FaceDownSleep, Clock, PowerOff, WifiSetup, Phone, Language, Back };
   enum class HardwareCheck : uint8_t { None, Microphone, Speaker, Display, Inputs };
   Menu menu_ = Menu::Closed;
   HardwareCheck hardware_check_ = HardwareCheck::None;
@@ -363,6 +396,12 @@ class App {
   std::optional<PowerStatus> power_status_;
   uint32_t power_read_at_ = 0, activity_at_ = 0, power_key_polled_at_ = 0;
   uint32_t screen_timeout_ms_ = 0;
+  uint32_t clock_after_ms_ = 0;  // the `clock` setting: rest before the clock face, 0 = off
+  bool clock_24h_ = true;        // the `time_format` setting
+  bool clock_showing_ = false;   // the clock face is up (App::clock_tick)
+  uint32_t clock_rest_at_ = 0;   // when the last block on the clock ended; rest counts from the later of this and activity_at_
+  bool wall_valid_ = false;      // the port knows the time of day (Hal::System::wall_time)
+  WallTime wall_{};              // the last reading behind the clock face
   // What the battery indicator shows, in the order a tap cycles through.
   enum class BatteryIndicator : uint8_t { Icon, Percentage, Both, Off };
   BatteryIndicator battery_display_ = BatteryIndicator::Off;
@@ -374,6 +413,12 @@ class App {
   bool display_dimmed_ = false, display_sleeping_ = false, power_off_armed_ = false;
   bool dozing_ = false, on_battery_ = false;
   void set_dozing(bool dozing);
+  // Face-down sleep. Stamps are 0 until set (now() | 1 keeps 0 meaning "none").
+  int16_t motion_[3] = {0, 0, 0};
+  uint32_t motion_at_ = 0, down_since_ = 0, up_since_ = 0;
+  bool motion_seen_ = false, face_down_ = false;
+  bool face_down_sleep_ = false;      // the `face_down_sleep` setting
+  bool reply_while_face_down_ = false;  // a reply arrived while dark; show it on the turn-over
   uint8_t wake_buttons_ = 0;
 
   // connection
@@ -411,6 +456,7 @@ class App {
   bool reply_final_ = false;
   uint32_t last_turn_rx_ = 0;
   std::string reply_;
+  static constexpr uint32_t kReplyLingerMs = 20000;  // reply text stays up this long before the mascot returns
   uint32_t reply_until_ = 0;  // reply text shown on the Ready screen until then
   bool cancel_held_ = false;
   bool cancel_long_fired_ = false;
