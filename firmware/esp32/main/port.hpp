@@ -9,10 +9,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <sys/time.h>
 
 #include "freertos/FreeRTOS.h"  // must precede every other FreeRTOS header
 
@@ -20,6 +22,8 @@
 #include "axp2101.hpp"
 #include "band_flush.hpp"
 #include "cores3.hpp"
+#include "pcf85063.hpp"
+#include "qmi8658.hpp"
 #include "shared_reply.hpp"
 #include "speaker_pa.hpp"
 #include "speaker_underruns.hpp"
@@ -67,7 +71,7 @@ namespace hgp {
 // Events
 
 enum class EventType : uint8_t { NetUp, NetDown, WsOpen, WsText, WsBinary, WsClosed, Mic, Console, Touch, Key,
-                                 WifiStarted, WifiDisconnected, WifiProvision, WifiScanDone, Encoder, Phone };
+                                 WifiStarted, WifiDisconnected, WifiProvision, WifiScanDone, Encoder, Phone, TimeSynced };
 
 // Payload of Phone events (posted by the Bluetooth host task).
 struct PhoneSample {
@@ -125,12 +129,17 @@ void release(Event& ev);
 // ---------------------------------------------------------------------------
 // HAL implementations
 
+// Local time from the system clock; false before a real date is set (RTC or
+// network). Shared by EspSystem::wall_time and the diag report.
+bool local_wall_time(hg::WallTime& out);
+
 class EspSystem final : public hg::System {
  public:
   uint32_t now_ms() override;
   uint64_t now_us() override;
   void random_bytes(uint8_t* out, size_t len) override;
   void log(hg::LogLevel level, std::string_view message) override;
+  bool wall_time(hg::WallTime& out) override;
   // Boards with BoardConfig::light_sleep: keeps the chip out of light sleep
   // except while dozing. Call before power management enables light sleep.
   bool enable_doze();
@@ -562,6 +571,62 @@ class TouchInput {
   volatile int64_t last_edge_us_ = INT64_MIN;  // per-edge debounce (ISR-written)
 };
 
+// Reads the QMI8658 at 10 Hz from its own task, on its own device handle on
+// the shared bus (ESP-IDF's i2c_master serialises the transactions), maps the
+// axes into the device frame and keeps EMA-smoothed milli-g in atomics. The
+// task never touches hg::App; the app task polls samples() and calls
+// App::on_motion directly.
+class MotionInput {
+ public:
+  bool begin(const ImuConfig& cfg, i2c_master_bus_handle_t bus);
+  // Latest smoothed sample for `diag` (0, 0, 0 before the first good read).
+  void latest(int16_t& x, int16_t& y, int16_t& z) const;
+  // Counts good reads: the app task forwards a sample only when this moved, so a
+  // sensor that stops answering goes stale in App::motion_tick instead of repeating.
+  uint32_t samples() const { return samples_.load(std::memory_order_acquire); }
+
+ private:
+  static void task(void* arg);
+  ImuConfig cfg_{};
+  i2c_master_dev_handle_t dev_ = nullptr;
+  std::unique_ptr<hg::Qmi8658> chip_;
+  std::atomic<int16_t> x_{0}, y_{0}, z_{0};
+  std::atomic<uint32_t> samples_{0};
+};
+
+// Wall time: the PCF85063 seeds the system clock at boot (UTC; days-from-
+// civil, never mktime), the `timezone` setting (POSIX TZ, default UTC0)
+// offsets it for display, and SNTP (pool.ntp.org) keeps both current while
+// the clock face is wanted and the network is up. A sync posts a TimeSynced
+// event; the app task then writes the RTC back. A user who never turns the
+// clock on sends no time traffic.
+class TimePort {
+ public:
+  // Seeds the clock when the RTC is present and valid, then applies the stored
+  // timezone. Never fails: without a usable RTC the clock starts with network
+  // time and the features that need it stay off until then.
+  void begin(const RtcConfig& cfg, i2c_master_bus_handle_t bus, hg::Storage& storage);
+  // Re-reads the `timezone` setting from storage and applies it.
+  void apply_timezone(hg::Storage& storage);
+  // The network came up or went down; SNTP runs while it and the demand hold.
+  void set_network(bool up);
+  // The clock face turned on or off: SNTP runs only while it is wanted.
+  void set_wanted(bool on);
+  // A sync arrived: records it and writes the RTC from the system clock.
+  void on_synced();
+  bool rtc_ready() const { return chip_ != nullptr; }
+  hg::json::Value diag() const;  // {valid, synced, utc} for the diag report
+
+ private:
+  static void on_sntp(struct timeval* tv);  // SNTP context: posts TimeSynced
+  void sync_sntp();  // starts or stops SNTP after set_network/set_wanted
+  i2c_master_dev_handle_t dev_ = nullptr;
+  std::unique_ptr<hg::Pcf85063> chip_;
+  bool network_up_ = false, wanted_ = false;
+  bool sntp_started_ = false;
+  bool synced_ = false;  // set and read on the app task
+};
+
 #if SOC_MIPI_DSI_SUPPORTED
 class Stc8Power final : public hg::Power {
  public:
@@ -781,7 +846,11 @@ struct Parts {
   const char* speaker = "none";
   bool touch = false;
   bool key = false;
+  const char* imu = "none";
+  const char* rtc = "none";
   i2c_master_bus_handle_t i2c = nullptr;  // scanned by `diag`
+  MotionInput* motion = nullptr;          // latest sample for the report
+  TimePort* time = nullptr;       // time state for the report
 };
 
 // Starts keeping a RAM copy of recent log lines. Call first in app_main.

@@ -121,6 +121,18 @@ BoardConfig make() {
   b.buttons = {0, -1, -1, -1};  // BOOT also works as TALK
   b.talk_label = "BOOT";
   b.cancel_label = "Swipe down";
+#if CONFIG_HG_BOARD_AMOLED_175
+  // QMI8658 (0x6B) on the shared bus, behind the display. Measured on a non-C
+  // board standing with its USB-C port at the bottom, which puts the picture's
+  // right edge up: chip y +1018 mg; lying face down: chip z +968 mg. So device
+  // x = +chip y and z = -chip z; device y = +chip x follows from the right-hand
+  // rule (no sideways tilt was measured). Face-down sleep reads z and the sizes
+  // of x and y only.
+  b.imu.enabled = true;
+  b.imu.x_from = 1; b.imu.y_from = 0; b.imu.z_from = 2;
+  b.imu.x_sign = 1; b.imu.y_sign = 1; b.imu.z_sign = -1;
+  b.rtc.enabled = true;  // PCF85063A at 0x51 on the same bus keeps UTC across power loss
+#endif
 #if CONFIG_HG_BOARD_AMOLED_175C
   b.amoled.rst = 1;
   b.touch.rst = 2;
@@ -233,6 +245,7 @@ BoardConfig make() {
   b.touch.height = 502;
   b.touch.offset_y = 8;     // touch reports glass rows; the UI starts at row 8
   b.axp2101 = true;
+  b.rtc.enabled = true;  // PCF85063 at 0x51 on the shared bus keeps UTC across power loss
   // PWR reaches only the AXP2101 (PWRON): its short press is read there. Holding it
   // keeps the PMIC's own power behaviour.
   b.axp_power_key = true;
@@ -287,6 +300,7 @@ BoardConfig make() {
   b.touch.mirror_y = true;
   b.touch.swap_xy = true;
   b.axp2101 = true;
+  b.rtc.enabled = true;  // PCF85063 at 0x51 on the shared bus keeps UTC across power loss
   b.axp_power_key = true;
   b.buttons = {0, -1, -1, -1};  // BOOT is TALK
   b.talk_label = "BOOT";

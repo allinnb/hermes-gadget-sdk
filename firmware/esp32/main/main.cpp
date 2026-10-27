@@ -68,6 +68,7 @@ hgp::CodecMic g_codec_mic;
 hgp::CodecSpeaker g_codec_speaker;
 hgp::OpusSpeakerDecoder g_opus;
 hgp::TouchInput g_touch;
+hgp::MotionInput g_motion;
 hgp::AxpPower g_power;
 hgp::LatchPower g_latch_power;
 hgp::CoreS3Board g_cores3;
@@ -78,6 +79,7 @@ hgp::M5PM1Power g_m5pm1_power;
 #endif
 hgp::Buttons g_buttons;
 hgp::Wifi g_wifi;
+hgp::TimePort g_time;
 hgp::EspUpdater g_updater;
 hg::TouchGestures* g_gestures = nullptr;
 
@@ -183,13 +185,16 @@ void dispatch(hg::App& app, hgp::Event& ev) {
     case EventType::NetUp:
       g_wifi.connected(app);
       app.on_network(true, text ? text : "");
+      g_time.set_network(true);
       break;
     case EventType::NetDown:
       app.on_network(false, text ? text : "");
+      g_time.set_network(false);
       break;
     case EventType::WifiDisconnected:
       g_wifi.disconnected();
       app.on_network(false, text ? text : "");
+      g_time.set_network(false);
       break;
     case EventType::WifiStarted: g_wifi.reconfigure(); break;
     case EventType::WifiScanDone: g_wifi.scan_done(); break;
@@ -237,6 +242,9 @@ void dispatch(hg::App& app, hgp::Event& ev) {
           case hgp::PhoneSample::Kind::Status: app.on_phone_status(phone->paired, phone->connected); break;
         }
       }
+      break;
+    case EventType::TimeSynced:
+      g_time.on_synced();  // writes the RTC from the now-set clock
       break;
   }
 }
@@ -311,10 +319,14 @@ extern "C" void app_main(void) {
     // framebuffer band: lower kCydFrameRows in port_display.cpp if this appears.
     ESP_LOGE(TAG, "microphone did not start: not enough internal RAM for its buffers");
   }
+  // No I2C bus on this board; the timezone setting and network time still apply.
+  g_time.begin(board.rtc, nullptr, g_storage);
   constexpr bool touch = false;
+  constexpr bool imu = false;  // no I2C bus: no motion sensor to bring up
   hgp::diag::Parts parts;
   parts.display = hal.display ? g_display.controller_name() : "none";
   parts.mic = hal.mic == &g_mic ? (board.mic.pdm ? "pdm" : "i2s") : "none";
+  parts.time = &g_time;
 #else
   bool io_rail_ready = true;
 #if SOC_MIPI_DSI_SUPPORTED
@@ -379,6 +391,8 @@ extern "C" void app_main(void) {
     if (board.light_sleep && g_codec.mic_link().switchable) g_codec_speaker.allow_power_down(g_codec.mic_link().format);
   }
   if (hal.speaker) hal.speaker_decoder = &g_opus;  // Opus replies when Hermes offers them
+  const bool imu = peripherals_ready && board.imu.enabled && g_motion.begin(board.imu, i2c_bus);
+  g_time.begin(board.rtc, i2c_bus, g_storage);
   const bool touch = peripherals_ready && (board.touch.enabled || board.pwr_key.enabled || board.encoder.a >= 0) &&
                      g_touch.begin(board.touch, board.pwr_key, board.encoder,
                                    board.touch.bus.sda >= 0 ? hgp::i2c::touch_bus(board.touch.bus) : i2c_bus);
@@ -408,6 +422,10 @@ extern "C" void app_main(void) {
   parts.touch = touch && g_touch.has_touch();
   parts.key = touch && g_touch.has_key();
   parts.i2c = i2c_bus;
+  parts.imu = imu ? "qmi8658" : "none";
+  parts.rtc = g_time.rtc_ready() ? "pcf85063" : "none";
+  parts.motion = imu ? &g_motion : nullptr;
+  parts.time = &g_time;
 #endif
   g_buttons.begin(board.buttons);
   hgp::diag::set_parts(parts);
@@ -422,6 +440,11 @@ extern "C" void app_main(void) {
   profile.frame_budget_us = CONFIG_HG_FRAME_BUDGET_US;
   profile.frame_log_ms = CONFIG_HG_FRAME_LOG_S * 1000u;
   profile.default_name = CONFIG_HG_DEFAULT_NAME;
+#if CONFIG_SPIRAM
+  profile.faces = esp_psram_is_initialized();
+#else
+  profile.faces = false;
+#endif
   profile.default_server_url = CONFIG_HG_DEFAULT_SERVER_URL;
   profile.default_access_token = CONFIG_HG_DEFAULT_ACCESS_TOKEN;
   profile.has_cancel_button = board.buttons.cancel >= 0 || touch;
@@ -433,6 +456,8 @@ extern "C" void app_main(void) {
     profile.touch_ppi = board.touch.ppi;
     profile.extra_settings = {"touch_cancel"};
   }
+  profile.extra_settings.push_back("timezone");  // the port keeps its own time
+  profile.motion_sensor = imu;
 #if !CONFIG_HG_BOARD_ESP32_CYD
   if (hal.mic == &g_codec_mic) {
     profile.mic_rate = hgp::CodecAudio::kRate;
@@ -456,6 +481,8 @@ extern "C" void app_main(void) {
     if (key == "wifi_ssid" || key == "wifi_pass") app.close_wifi_setup();
     if (key == "wifi_ssid" || key == "wifi_pass" || key == "wifi_nets") g_wifi.networks_changed();
     if (key == "touch_cancel") apply_touch_cancel();
+    if (key == "clock") g_time.set_wanted(app.clock_enabled());
+    if (key == "timezone") g_time.apply_timezone(g_storage);
 #if !CONFIG_HG_BOARD_ESP32_CYD
     if (key == "name" && hgp::board_config().bluetooth) g_phone.set_name(device_name());
 #endif
@@ -488,7 +515,13 @@ extern "C" void app_main(void) {
   };
 #endif
   app.begin();
+  g_time.set_wanted(app.clock_enabled());  // SNTP only while the clock face is on
   hgp::console::begin();
+
+#if !CONFIG_HG_BOARD_ESP32_CYD
+  TickType_t motion_at = 0;     // last motion poll (the loop runs at ~10 ms)
+  uint32_t motion_samples = 0;  // the motion task's count at the last forwarded sample
+#endif
 
   for (;;) {
     hgp::Event ev;
@@ -516,5 +549,20 @@ extern "C" void app_main(void) {
     g_wifi.tick(app, g_system.now_ms());
     if (g_gestures) g_gestures->tick(g_system.now_ms());
     app.tick();
+#if !CONFIG_HG_BOARD_ESP32_CYD
+    // The motion task keeps the latest sample; poll it about every 100 ms instead
+    // of letting 10 Hz events fill the queue. Only new reads go to the app, so a
+    // sensor that stops answering still goes stale there.
+    if (imu && xTaskGetTickCount() - motion_at >= pdMS_TO_TICKS(100)) {
+      motion_at = xTaskGetTickCount();
+      const uint32_t n = g_motion.samples();
+      if (n != motion_samples) {
+        motion_samples = n;
+        int16_t mx, my, mz;
+        g_motion.latest(mx, my, mz);
+        app.on_motion(mx, my, mz);
+      }
+    }
+#endif
   }
 }

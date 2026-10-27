@@ -322,6 +322,8 @@ Board option `esp32s3-touch-amoled-175`, for Waveshare's all-in-one board: an ES
 | Microphones | ES7210 | I2C 0x40; I2S DIN 10 (shares the bus above), MIC1 + MIC2 |
 | Power | AXP2101 | I2C 0x34; battery/USB readings and local power-off; charging and rails keep their defaults |
 | I/O expander | TCA9554 | I2C 0x20; P4 mirrors the PWR key |
+| Motion sensor | QMI8658 | I2C 0x6B; accelerometer only, read at 10 Hz (face-down sleep) |
+| Clock chip | PCF85063 | I2C 0x51; keeps the time in UTC across resets, set from network time (resting clock) |
 | I2C bus | | SDA 15, SCL 14, 400 kHz |
 | BOOT key | | GPIO 0 |
 
@@ -356,7 +358,7 @@ The USB-C port is the S3's own USB. It shows up as a "USB JTAG/serial debug unit
 
 This port is written from Waveshare's published pinout and drivers. On the first flash, go through this list, and for anything that looks wrong send the report from `hermes-gadget diag --port COMx`:
 
-1. **Boot log:** `CO5300 466x466 ready`, `codecs: speaker ready, microphones ready` and `touch ready, key ready`. A `did not answer` or `missing` line names the part to look at. The `hg.diag` lines sum it up: reset reason, memory, and `parts: display co5300, microphone es7210, speaker es8311, touch yes, key yes`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x20` (TCA9554), `0x34` (AXP2101), `0x40` (ES7210) and `0x5a` (CST9217).
+1. **Boot log:** `CO5300 466x466 ready`, `codecs: speaker ready, microphones ready` and `touch ready, key ready`. A `did not answer` or `missing` line names the part to look at. The `hg.diag` lines sum it up: reset reason, memory, and `parts: display co5300, microphone es7210, speaker es8311, touch yes, key yes, imu qmi8658, rtc pcf85063`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x20` (TCA9554), `0x34` (AXP2101), `0x40` (ES7210), `0x51` (PCF85063), `0x5a` (CST9217) and `0x6b` (QMI8658). The `diag` report also has a `time` object once the clock chip or the network supplies the time.
 2. **Console:** `hermes-gadget console --port COMx` on the USB-C port answers `status`. If the log shows but commands get no answer, the console is still on UART0.
 3. **Screen:** the mascot is centred, upright and not mirrored, and the colours are right (amber accents, not blue). A thin stripe at one edge means the column offset is off.
 4. **Touch:** hold the screen and the listening waves appear; a swipe *down* (not up) cancels. A reversed swipe means the touch mirroring needs flipping.
@@ -398,7 +400,7 @@ The USB-C port is the S3's own USB Serial/JTAG, used for both flashing and the s
 
 A smoke test on a V2 board confirmed the boot, the display and the I2C devices, and the codec, touch, speaker and microphone tasks started; touch, microphone capture, speaker playback and battery are untested (see [hardware validation](hardware-validation.md)). On the first flash, check:
 
-1. **Boot log:** `CO5300 368x448 ready`, `expander resets 0x07 ready`, `codecs: speaker ready, microphones ready (es8311 analog)` and `touch ready, key off, encoder off`. The `hg.diag` lines should read `parts: display co5300, microphone es8311, speaker es8311, touch yes, key no`. In the `diag` report, `i2c` should include `0x15` (CST820), `0x18` (ES8311), `0x20` (TCA9554) and `0x34` (AXP2101). There is no ES7210 on this board.
+1. **Boot log:** `CO5300 368x448 ready`, `expander resets 0x07 ready`, `codecs: speaker ready, microphones ready (es8311 analog)` and `touch ready, key off, encoder off`. The `hg.diag` lines should read `parts: display co5300, microphone es8311, speaker es8311, touch yes, key no, imu none`. In the `diag` report, `i2c` should include `0x15` (CST820), `0x18` (ES8311), `0x20` (TCA9554) and `0x34` (AXP2101). There is no ES7210 on this board.
 2. **Screen:** the mascot is upright and not mirrored, and the colours are right (amber accents, not blue); a stripe at one edge means the column offset is off. If the image is shifted or the panel stays dark, the vendor init table is the first thing to revisit.
 3. **Touch:** holding the screen shows the listening waves and a swipe *down* cancels. If the coordinates are mirrored, flip `touch.mirror_x`/`mirror_y` in `board.cpp`.
 4. **Microphone:** say something; the waves move with your voice and Hermes's transcript is right. The ES8311 analog input path is the part most likely to need its gain adjusted.
@@ -417,9 +419,10 @@ Board option `esp32s3-touch-amoled-206`, for Waveshare's 2.06" AMOLED touch watc
 | Speaker DAC | ES8311 | I2C 0x18; I2S MCLK 16, BCLK 41, WS 45, DOUT 40; NS4150B amplifier enable 46 |
 | Microphones | ES7210 | I2C 0x40; two microphones on MIC1/MIC2 (MIC3 is the speaker loopback, unused); I2S DIN 42 |
 | Power | AXP2101 | I2C 0x34; battery/USB readings, PWR short press and local power-off; charging and rails keep their defaults |
+| Clock chip | PCF85063 | I2C 0x51; keeps the time in UTC across resets, set from network time (resting clock) |
 | I2C bus | | SDA 15, SCL 14, 400 kHz |
 | BOOT key | | GPIO 0 |
-| Not used | QMI8658 IMU (I2C 0x6B), PCF85063 RTC (0x51), TF card | |
+| Not used | QMI8658 IMU (I2C 0x6B), TF card | |
 
 The audio codecs and amplifier run from the always-on 3.3 V rail, so no AXP2101 rail is switched for audio. The UI uses rows 8–493 of the panel. The glass corners are rounded with a radius of about 100 px (measured with a test grid), so the status row also keeps its text 64 px (`corner_inset`) in from the sides.
 
@@ -442,7 +445,7 @@ The USB-C port is the S3's own USB Serial/JTAG, used for both flashing and the s
 
 ### First flash: what to check
 
-1. **Boot log:** `CO5300 410x486 ready`, `codecs: speaker ready, microphones ready`, `touch read on INT (GPIO 38)` and `touch ready, key off, encoder off`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x34` (AXP2101), `0x40` (ES7210), `0x51` (PCF85063) and `0x6b` (QMI8658). `0x38` (FT3168) is listed only while the touch chip is awake: it dozes after a few idle seconds and doesn't answer then.
+1. **Boot log:** `CO5300 410x486 ready`, `codecs: speaker ready, microphones ready`, `touch read on INT (GPIO 38)` and `touch ready, key off, encoder off`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x34` (AXP2101), `0x40` (ES7210), `0x51` (PCF85063) and `0x6b` (QMI8658). `0x38` (FT3168) is listed only while the touch chip is awake: it dozes after a few idle seconds and doesn't answer then. When the PCF85063 answers, the parts line adds `rtc pcf85063`, and `diag` reports a `time` object once the time is known.
 2. **Screen:** the mascot is upright and not mirrored; text is white on dark slate bars, and the link dot is green once online. A stripe at one edge means the column offset is off. Text clipped by a rounded corner means `corner_inset` needs raising.
 3. **Touch:** holding the screen shows the listening waves, and a swipe *down* cancels. Report mirrored coordinates with the board revision; this FT5x06 adapter does not apply `touch.mirror_x` or `touch.mirror_y`. If they are 8 rows off, adjust `touch.offset_y`.
 4. **Microphones:** say something. The waves move with your voice and the transcript is right; in tap mode, a sentence spoken at arm's length starts and ends the recording.
@@ -462,10 +465,11 @@ Board option `esp32s3-touch-amoled-216`, for Waveshare's 2.16" AMOLED touch deve
 | Speaker DAC | ES8311 | I2C 0x18; I2S MCLK 42, BCLK 9, WS 45, DOUT 8; amplifier enable 46 |
 | Microphones | ES7210 | I2C 0x40; two microphones plus echo cancellation; I2S DIN 10 |
 | Power | AXP2101 | I2C 0x34; battery/USB readings, PWR short press and local power-off; charging and rails keep their defaults |
+| Clock chip | PCF85063 | I2C 0x51; keeps the time in UTC across resets, set from network time (resting clock) |
 | I2C bus | | SDA 15, SCL 14, 400 kHz |
 | KEY3 | | GPIO 18 (not wired as a gadget control) |
 | BOOT key | | GPIO 0 |
-| Not used | QMI8658 IMU (I2C 0x6B), PCF85063 RTC (0x51), TF card | |
+| Not used | QMI8658 IMU (I2C 0x6B), TF card | |
 
 No AXP2101 output is switched for audio, as in Waveshare's BSP, which does not configure the PMIC. Battery operation has not been tested. This port stays **experimental** until a full [physical verification report](hardware-validation.md) is recorded for the exact board.
 
@@ -482,7 +486,7 @@ The USB-C port is the S3's own USB Serial/JTAG, used for both flashing and the s
 
 ### First flash: what to check
 
-1. **Boot log:** `CO5300 480x480 ready`, `codecs: speaker ready, microphones ready`, plus `touch ready, key off, encoder off`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x34` (AXP2101), `0x40` (ES7210), `0x51` (PCF85063), `0x5a` (CST9220) and `0x6b` (QMI8658).
+1. **Boot log:** `CO5300 480x480 ready`, `codecs: speaker ready, microphones ready`, plus `touch ready, key off, encoder off`. In the `diag` report, `i2c` should include `0x18` (ES8311), `0x34` (AXP2101), `0x40` (ES7210), `0x51` (PCF85063), `0x5a` (CST9220) and `0x6b` (QMI8658). When the PCF85063 answers, the parts line adds `rtc pcf85063`, and `diag` reports a `time` object once the time is known.
 2. **Screen:** the mascot is upright and not mirrored; text is white on dark slate bars, and the link dot is green once online. A stripe at one edge means the column offset is off.
 3. **Touch:** holding the screen shows the listening waves, and a swipe *down* cancels. Report mirrored or offset coordinates with the board revision.
 4. **Microphones:** say something. The waves move with your voice and the transcript is right; in tap mode, a sentence spoken at arm's length starts and ends the recording.
@@ -885,7 +889,7 @@ hermes gadget update "Kitchen" --latest     # the newest release's firmware for 
 hermes gadget update "Kitchen" firmware/esp32/.pio/build/esp32s3-touch-amoled-175/firmware.bin
 ```
 
-- `--latest` reads the newest [release](https://github.com/Adolanium/hermes-gadget-sdk/releases)'s manifest, picks the image for the device's board, and checks its size and SHA-256 against the manifest before using it. A device that already runs that version is left alone; `--force` installs it again. `hermes gadget devices` shows the version each device runs.
+- `--latest` reads the newest [release](https://github.com/Adolanium/hermes-gadget-sdk/releases)'s manifest, picks the image for the device's board, and checks its size and SHA-256 against the manifest before using it. A device that already runs that version or a newer one, including a source build such as `0.4.0-12-gabc1234`, is left alone, and a device whose version can't be read is refused; `--force` installs the release anyway. `hermes gadget devices` shows the version each device runs.
 - The gateway installs the image as soon as the device is online, and the command waits and reports progress (`--no-wait` returns at once).
 - The device shows the progress, restarts into the new firmware, and keeps it once it reaches Hermes again.
 - If the new firmware doesn't reach Hermes within 5 minutes, or crashes before then, the device goes back to the previous one by itself.
@@ -936,7 +940,7 @@ When the board has a power adapter, `status` includes a `power` object; the stat
 | `forget-key` | New device identity on next boot (re-enrollment and re-pairing) |
 | `factory-reset` | Erase the device key and all settings |
 
-The keys are `name`, `server`, `token`, `talk_mode` (`hold` or `tap`), `volume`, `brightness`, `screen_timeout` (0..3600 seconds, 0 disables it), `battery_display` (`icon`, `percentage`, `both` or `off`), `language` (`en`, `es`, or `auto` to follow Hermes; see [Language](using-gadget.md#language)), `wifi_ssid` and `wifi_pass`. The [device settings menu](using-gadget.md#device-settings-and-hardware-checks) saves volume, brightness, talk mode, battery indicator, screen timeout and language without a console.
+The keys are `name`, `server`, `token`, `talk_mode` (`hold` or `tap`), `volume`, `brightness`, `screen_timeout` (0..3600 seconds, 0 disables it), `clock` (0 or 5..3600 seconds of rest before the resting clock shows; 0, the default, turns it off), `time_format` (`12h` or `24h`, the clock face), `timezone` (a POSIX TZ string such as `CET-1CEST,M3.5.0,M10.5.0/3`; the default `UTC0`; ESP32 boards), `battery_display` (`icon`, `percentage`, `both` or `off`), `language` (`en`, `es`, or `auto` to follow Hermes; see [Language](using-gadget.md#language)), `wifi_ssid` and `wifi_pass`. The [device settings menu](using-gadget.md#device-settings-and-hardware-checks) saves volume, brightness, talk mode, battery indicator, screen timeout, clock face and language without a console.
 
 In the `diag` report, `i2c` lists the addresses that answered, such as `0x18`. A probe can time out while another task uses the bus, so the scan tries each address up to three times. An address that times out on every try appears as `timeout at 0x19`, and the scan continues. Four such addresses in a row end the scan with `bus stuck at` the first of them, such as `bus stuck at 0x08`. That usually means a device or a short holds SDA or SCL low.
 

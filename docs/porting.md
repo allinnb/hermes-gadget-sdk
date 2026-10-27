@@ -92,6 +92,18 @@ CoreS3 has a separate `CoreS3Control` in `firmware/drivers/cores3.cpp`. It enabl
 
 A display that advertises `has_backlight` must accept zero percent to turn dark. An OLED or AMOLED driver sets `emissive`, so the UI draws its background true black and leaves those pixels unlit. `screen_timeout` dims and then darkens an idle display while keeping the device connected. Raw touch drivers should use `TouchGestures`, which consumes the first touch when waking. Button input through `App::on_button` does the same.
 
+## Motion
+
+Boards with an accelerometer can offer face-down sleep. Set `DeviceProfile::motion_sensor` when the sensor starts, and call `App::on_motion(x_mg, y_mg, z_mg)` from the app task 5-25 times a second with lightly smoothed milli-g values in the device frame: `+x` towards the right of the picture, `+y` towards its top, `+z` out of the screen towards the viewer. A board lying flat with the screen up reads about `(0, 0, +1000)`. Samples older than two seconds are ignored, so a stalled sensor cannot keep the screen dark.
+
+`firmware/drivers/qmi8658.cpp` with `port_motion.cpp` is the QMI8658 reference: a 10 Hz task reads the chip on its own device handle on the shared I2C bus, and the app loop polls it and forwards only new samples. Fill in `BoardConfig::imu` (`ImuConfig`): the I2C address, which chip axis feeds each device axis (`x_from` and friends), and its sign. Add the `imu` entry only after `diag` confirms the axes on a real board: lying face down, `motion.z` reads near `-1000`; lying screen up, near `+1000`; standing with the picture's top edge up, `motion.y` near `+1000`. The `face_down_sleep` setting turns the sleep on; it is off by default. On a board that can sleep face down, the console's `status` includes `"face_down": true|false`.
+
+A 10 Hz motion task wakes a light-sleeping chip every 100 ms. A slower poll while dozing must stay under the core's two-second stale limit, or the screen lights.
+
+## Clock
+
+Boards with a display can offer the resting clock ([using-gadget.md](using-gadget.md#resting-clock)). Implement `System::wall_time(WallTime&)` (`hal.hpp`) to return the local time; it returns false until the port knows the time, and the clock face stays off until then. On the ESP32 port, `port_time.cpp` is the reference: a board declares its clock chip with `BoardConfig::rtc` (`RtcConfig`, I2C address), and at boot the port probes the PCF85063 on the shared bus and seeds the system clock from its UTC time — a chip that does not answer, one whose backup power was lost, or one that holds an impossible time (a digit past 9, a day past the month's end) is skipped and the port waits for the network instead. While the `clock` setting is above 0 and the network is up, SNTP (`pool.ntp.org`) runs, and each sync writes the time back to the chip. The `timezone` extra setting is a POSIX TZ string applied through `TZ` and `tzset()`; a string newlib cannot read means UTC.
+
 ## Audio through a codec chip
 
 Boards like the ESP32-S3-BOX family and the ESP32-S3-Touch-AMOLED-1.75 route audio through codecs (ES7210 ADC, ES8311 DAC) configured over I2C. `CodecAudio`, `CodecMic` and `CodecSpeaker` in `port_codec.cpp` implement `hg::AudioIn` and `hg::AudioOut` on top of `esp_codec_dev` for that pair: fill in `BoardConfig::codec` and `BoardConfig::i2c`. Other codecs follow the same contracts:

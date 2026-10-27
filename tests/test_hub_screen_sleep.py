@@ -19,7 +19,7 @@ from hermes_gadget_plugin import protocol
 class Device:
     """A bare protocol client: says what the firmware says, records what it receives."""
 
-    def __init__(self, url: str, *, key: bytes | None = None, sleeping: bool | None = None):
+    def __init__(self, url: str, *, key: bytes | None = None, sleeping: bool | None = None, dashboard: bool = False):
         from websockets.sync.client import connect
 
         self.key = key or secrets.token_bytes(32)
@@ -31,6 +31,8 @@ class Device:
                                                                                   "format": "rgb565"}}})
         if sleeping is not None:
             hello["display_sleeping"] = sleeping
+        if dashboard:
+            hello["caps"]["dashboard"] = {"v": 1}
         self.ws.send(json.dumps(hello))
         challenge = json.loads(self.ws.recv(timeout=5))
         if challenge["enrolled"]:
@@ -221,3 +223,48 @@ def test_the_simulated_firmware_holds_a_card_until_its_screen_wakes(devserver, m
     assert sim.wait_for(lambda: not session.display_sleeping, timeout=5)
     assert sim.wait_screen("card", timeout=5)
     assert sim.last_received("display")["title"] == "Timer"
+
+
+def test_the_simulated_firmware_sleeps_face_down(devserver, make_sim):
+    """End to end with the C++ core: lying face down sleeps the screen, turning it over wakes it."""
+    hub, _brain, url = devserver()
+    sim = make_sim(url, board="sim-466x466-round")
+    assert sim.wait_screen("ready", timeout=10)
+    session = next(iter(hub.sessions.values()))
+    assert sim.console("set face_down_sleep on").startswith("@ok")
+    sim.set_face_down(True)
+    assert sim.wait_for(lambda: sim.status()["face_down"], timeout=5)
+    assert sim.peripherals.backlight == 0
+    assert sim.wait_for(lambda: session.display_sleeping, timeout=5)
+
+    sim.set_face_down(False)
+    assert sim.wait_for(lambda: not sim.status()["face_down"], timeout=5)
+    assert sim.peripherals.backlight > 0
+    assert sim.wait_for(lambda: not session.display_sleeping, timeout=5)
+
+    plain = make_sim(url, state="no-motion")
+    assert plain.wait_screen("ready", timeout=10)
+    assert "face_down" not in plain.status()
+
+
+def test_the_simulated_firmware_rests_on_a_clock(devserver, make_sim):
+    """End to end with the C++ core: after a rest the round board shows the clock at 70% of the
+    brightness setting; a tap brings Ready back at full brightness without recording."""
+    hub, _brain, url = devserver()
+    sim = make_sim(url, board="sim-466x466-round")
+    assert sim.wait_screen("ready", timeout=10)
+    session = next(iter(hub.sessions.values()))
+    sim.set_wall_time(time.strptime("2026-10-24T09:41", "%Y-%m-%dT%H:%M"))
+    assert sim.console("set talk_mode tap").startswith("@ok")  # a tap on Ready would record
+    assert sim.console("set clock 5").startswith("@ok")
+    assert sim.wait_screen("clock", timeout=10)
+    assert sim.peripherals.backlight == 70
+    assert not session.display_sleeping  # a lit screen: Hermes still sends what it has
+
+    sim.touch(True, 233, 233)
+    sim.run_for(0.05)
+    sim.touch(False, 233, 233)
+    assert sim.wait_screen("ready", timeout=5)
+    sim.run_for(0.5)
+    assert sim.status()["screen"] == "ready", "the tap only brought Ready back"
+    assert sim.peripherals.backlight == 100
