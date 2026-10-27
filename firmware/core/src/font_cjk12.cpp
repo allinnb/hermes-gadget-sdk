@@ -4138,8 +4138,7 @@ bool is_cjk(char32_t code_point) {
 }
 
 int char_columns(char32_t code_point) {
-  if (code_point == 0 || code_point == '
-') return 0;
+  if (code_point == 0 || code_point == '\n' || code_point == '\r') return 0;
   return is_cjk(code_point) ? 2 : 1;
 }
 
