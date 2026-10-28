@@ -153,6 +153,7 @@ void App::load_settings() {
   face_down_sleep_ = setting("face_down_sleep", "off") == "on";
   clock_after_ms_ = static_cast<uint32_t>(std::max(0, std::min(3600, std::atoi(setting("clock", "0").c_str())))) * 1000;
   clock_24h_ = setting("time_format", "24h") != "12h";
+  builtin_face_selected_ = profile_.mascot_swipe_faces && setting("face_source", "profile") == "builtin";
   if (face_down_) return;  // a face-down screen stays dark until the gadget is turned over
   activity_at_ = now();
   display_dimmed_ = display_sleeping_ = false;
@@ -1739,7 +1740,7 @@ void App::update_model() {
   m.yes.clear();
   m.no.clear();
   m.qr = nullptr;
-  m.face = face_ ? &*face_ : nullptr;
+  m.face = face_ && !builtin_face_selected_ ? &*face_ : nullptr;
   m.dash.clear();
   m.hero = false;
   m.name_target = false;
@@ -2160,6 +2161,8 @@ std::string App::console(std::string_view raw) {
       return "@error time_format must be 12h or 24h";
     if (key == "language" && !value.empty() && value != "auto" && !i18n::parse(value))
       return "@error language must be one of:" + language_codes();
+    if (key == "face_source" && !value.empty() && value != "builtin" && value != "profile")
+      return "@error face_source must be builtin or profile";
     if (!hal_.storage) return "@error no storage";
     if (value.empty()) hal_.storage->erase(setting_storage_key(key));
     else if (!hal_.storage->set(setting_storage_key(key), value)) return "@error could not save " + key;

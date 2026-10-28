@@ -17,6 +17,9 @@ using hg::json::Value;
 
 namespace {
 
+std::string face_message(const std::string& profile, const std::string& hash, uint8_t ink = 0xff,
+                         std::vector<int> anchors = {607, 293, 262, 620, 801, 107, 396, 508, 586, 649});
+
 struct FakeHal : hg::Display, hg::AudioIn, hg::AudioOut, hg::Transport, hg::Storage, hg::System {
   // System
   uint32_t clock = 1000;
@@ -1214,6 +1217,54 @@ TEST("touch: a quick Ready mascot tap reacts locally, while a hold still talks")
   CHECK(r.fake.mic_on);
   CHECK_EQ(reactions, 1);
   touch.update(false, 0, 0, r.fake.clock);
+}
+
+TEST("touch: a horizontal mascot swipe toggles cached profile and built-in faces") {
+  hg::DeviceProfile profile = Rig::touch_profile();
+  profile.mascot_touch_reaction = true;
+  profile.mascot_swipe_faces = true;
+  profile.extra_settings = {"touch_cancel", "face_source"};
+  Rig r(profile);
+  r.fake.make_round(466);
+  r.bring_online(true);
+  r.server(face_message("default", "swipe-face"));
+  CHECK(r.app.model().face && r.app.model().face->hash == "swipe-face");
+  hg::TouchGestures touch(r.app);
+  int swipes = 0;
+  r.app.on_mascot_swipe = [&] { ++swipes; };
+
+  touch.update(true, 233, 220, r.fake.clock);
+  touch.update(true, 255, 222, r.fake.clock + 30);  // drag begins, below the switch threshold
+  CHECK(r.app.model().face != nullptr);
+  touch.update(true, 305, 224, r.fake.clock + 60);
+  touch.update(false, 0, 0, r.fake.clock + 70);
+  CHECK_EQ(swipes, 1);
+  CHECK(r.app.model().face == nullptr);
+  CHECK_EQ(r.fake.kv["face_source"], std::string("builtin"));
+  CHECK(r.fake.last("audio.start") == nullptr);
+
+  touch.update(true, 233, 220, r.fake.clock + 100);
+  touch.update(true, 160, 222, r.fake.clock + 150);
+  touch.update(false, 0, 0, r.fake.clock + 160);
+  CHECK_EQ(swipes, 2);
+  CHECK(r.app.model().face && r.app.model().face->hash == "swipe-face");
+  CHECK_EQ(r.fake.kv["face_source"], std::string("profile"));
+}
+
+TEST("touch: a mascot swipe without a cached profile face changes nothing") {
+  hg::DeviceProfile profile = Rig::touch_profile();
+  profile.mascot_touch_reaction = true;
+  profile.mascot_swipe_faces = true;
+  Rig r(profile);
+  r.fake.make_round(466);
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  touch.update(true, 233, 220, r.fake.clock);
+  touch.update(true, 310, 220, r.fake.clock + 50);
+  touch.update(false, 0, 0, r.fake.clock + 60);
+  CHECK(r.app.model().face == nullptr);
+  CHECK(r.fake.kv.find("face_source") == r.fake.kv.end());
+  CHECK(r.fake.last("audio.start") == nullptr);
 }
 
 TEST("touch: boards without the mascot reaction keep quick-tap TALK") {
@@ -4106,8 +4157,8 @@ TEST("language: the agent can set auto through screen.language") {
 
 namespace {
 // A face message (docs/protocol.md#faces) whose every bitmap byte is `ink`.
-std::string face_message(const std::string& profile, const std::string& hash, uint8_t ink = 0xff,
-                         std::vector<int> anchors = {607, 293, 262, 620, 801, 107, 396, 508, 586, 649}) {
+std::string face_message(const std::string& profile, const std::string& hash, uint8_t ink,
+                         std::vector<int> anchors) {
   std::vector<uint8_t> data(3 * (512 + 1152 + 2592 + 4608), ink);
   for (int v : anchors) {
     data.push_back(static_cast<uint8_t>(v & 0xff));
@@ -4126,6 +4177,25 @@ const hg::WallTime kWallSaturday{2026, 10, 24, 6, 9, 41, 0};
 // Sunday, 25 October 2026 at 00:05 — midnight in both time formats.
 const hg::WallTime kWallMidnight{2026, 10, 25, 0, 0, 5, 0};
 }  // namespace
+
+TEST("faces: the selected built-in source keeps a downloaded face cached and restores it instantly") {
+  hg::DeviceProfile profile = Rig::profile("ws://hermes.local:8765/gadget");
+  profile.mascot_swipe_faces = true;
+  profile.extra_settings = {"face_source"};
+  Rig r(profile);
+  r.fake.kv["face_source"] = "builtin";
+  r.bring_online(true);
+  r.server(face_message("default", "cached"));
+  CHECK(r.app.model().face == nullptr);
+  CHECK(r.app.swipe_mascot(1));
+  CHECK(r.app.model().face && r.app.model().face->hash == "cached");
+  CHECK_EQ(r.fake.kv["face_source"], std::string("profile"));
+  r.app.on_transport_closed("network flap");
+  r.advance(5000);
+  r.app.on_transport_open();
+  const Value* hello = r.fake.last("hello");
+  CHECK(hello && (*hello)["face"].as_string() == "cached");
+}
 
 TEST("faces: a face replaces the mascot until a face without bits brings it back") {
   Rig r;

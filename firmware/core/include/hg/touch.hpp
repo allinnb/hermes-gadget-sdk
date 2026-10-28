@@ -9,6 +9,7 @@
 //                      does nothing (the touch-down brought Ready back)
 //   tap a list row     asks Hermes for that profile
 //   swipe down         a CANCEL press and release (discard, close, stop, "no")
+//   swipe mascot left/right  on an enabled board, toggle built-in/profile face
 //
 // Feed it raw touch samples; it calls App::on_button. Portable and clock-free,
 // so the simulator and the tests drive it exactly like the firmware does.
@@ -42,7 +43,7 @@ class TouchGestures {
   void tick(uint32_t now_ms);
 
  private:
-  enum class State : uint8_t { Idle, Pending, Settings, Picker, PickerDrag, Talk, Swipe, Ignored };
+  enum class State : uint8_t { Idle, Pending, MascotDrag, Settings, Picker, PickerDrag, Talk, Swipe, Ignored };
   void press(Button b);
   void release(Button b);
 

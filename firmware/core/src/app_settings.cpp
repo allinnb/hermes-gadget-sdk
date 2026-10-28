@@ -33,6 +33,19 @@ bool App::react_to_mascot() {
   return true;
 }
 
+bool App::swipe_mascot(int direction) {
+  if (!profile_.mascot_swipe_faces || direction == 0 || model_.screen != Screen::Ready || !model_.hero ||
+      mode_ != Mode::Idle || overlay_ != Overlay::None || !face_)
+    return false;
+  builtin_face_selected_ = !builtin_face_selected_;
+  const char* source = builtin_face_selected_ ? "builtin" : "profile";
+  if (hal_.storage && !hal_.storage->set("face_source", source))
+    log(LogLevel::Warn, "could not save face source");
+  if (on_mascot_swipe) on_mascot_swipe();
+  update_model();
+  return true;
+}
+
 bool App::open_settings() {
   // The alarm too: a hold that began just before it rang must not cover it and silence it.
   if (face_down_ || prompt_showing() || ota_busy() || ota_ == Ota::Restarting || !wifi_setup_text_.empty() ||

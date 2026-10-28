@@ -61,6 +61,9 @@ struct DeviceProfile {
   // A quick tap on the Ready mascot plays a local reaction instead of starting
   // tap-to-talk. A hold still becomes TALK after the normal gesture threshold.
   bool mascot_touch_reaction = false;
+  // Horizontal swipes over the Ready mascot toggle the built-in mascot and the
+  // current Hermes profile face, when one is cached.
+  bool mascot_swipe_faces = false;
   // Board-specific settings the console accepts besides the core ones. Changes
   // reach the port through App::on_setting_changed.
   std::vector<std::string> extra_settings;
@@ -135,6 +138,7 @@ class App {
   bool profile_name_hit(int x, int y) const;
   bool mascot_hit(int x, int y) const;
   bool react_to_mascot();
+  bool swipe_mascot(int direction);
   bool open_profile_picker();
   bool profile_picker_open() const { return overlay_ == Overlay::Profiles; }
   bool profile_switch_pending() const { return !profile_pending_.empty(); }
@@ -183,8 +187,9 @@ class App {
   std::function<bool()> on_phone_pair;
   std::function<void()> on_phone_pair_close;
   std::function<void()> on_phone_forget;  // removes every paired phone
-  // Optional board feedback for a quick tap on the Ready mascot.
+  // Optional board feedback for Ready mascot gestures.
   std::function<void()> on_mascot_touch;
+  std::function<void()> on_mascot_swipe;
 
   // Serial-console command (provisioning, bench automation). Returns the
   // response; machine-readable lines start with '@'.
@@ -374,6 +379,7 @@ class App {
   std::vector<AgentProfile> agent_profiles_;  // offered in welcome; empty = no switching
   std::string agent_profile_ = "default";
   std::optional<mascot::Face> face_;  // agent_profile_'s, from Hermes; kept through reconnects
+  bool builtin_face_selected_ = false;  // display choice only; face_ remains cached for hello.face
   uint32_t mascot_reaction_until_ = 0;
   // A profile.select awaiting Hermes's answer; one at a time (empty: none).
   std::string profile_pending_;

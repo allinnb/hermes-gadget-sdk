@@ -458,6 +458,7 @@ extern "C" void app_main(void) {
 #if CONFIG_HG_BOARD_M5STACK_STOPWATCH
   profile.ready_status_strip = true;
   profile.mascot_touch_reaction = true;
+  profile.mascot_swipe_faces = true;
 #endif
 #if CONFIG_SPIRAM
   profile.faces = esp_psram_is_initialized();
@@ -475,6 +476,9 @@ extern "C" void app_main(void) {
     profile.touch_ppi = board.touch.ppi;
     profile.extra_settings = {"touch_cancel"};
   }
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  profile.extra_settings.push_back("face_source");
+#endif
   profile.extra_settings.push_back("timezone");  // the port keeps its own time
   profile.motion_sensor = imu;
 #if !CONFIG_HG_BOARD_ESP32_CYD
@@ -519,6 +523,7 @@ extern "C" void app_main(void) {
   app.current_wifi = [] { return g_wifi.current(); };
 #if CONFIG_HG_BOARD_M5STACK_STOPWATCH
   app.on_mascot_touch = [] { hgp::m5ioe1().pulse_vibration(42, 32, g_system.now_ms()); };
+  app.on_mascot_swipe = [] { hgp::m5ioe1().pulse_vibration(52, 40, g_system.now_ms()); };
 #endif
   app.on_diag = [](hg::json::Value& report) {
     hgp::diag::report(report);

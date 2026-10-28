@@ -84,11 +84,26 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
       if (swiped_down) {
         state_ = State::Swipe;
         press(Button::Cancel);
+      } else if (on_mascot_ && std::abs(dx) >= cfg_.swipe_px && std::abs(dx) > std::abs(dy)) {
+        // The display source changes as soon as the deliberate horizontal swipe is clear;
+        // release then does nothing.
+        app_.swipe_mascot(dx);
+        state_ = State::Ignored;
       } else if (std::abs(dx) > cfg_.slop_px || std::abs(dy) > cfg_.slop_px) {
-        // Neither a hold nor a downward swipe yet: wait for a clear swipe, else ignore.
-        if (dy < 0 || std::abs(dx) >= std::abs(dy)) state_ = State::Ignored;
+        // A horizontal drag that began on the mascot gets room to reach the swipe
+        // threshold without turning into TALK; other ambiguous drags are ignored.
+        if (on_mascot_ && std::abs(dx) > std::abs(dy)) state_ = State::MascotDrag;
+        else if (dy < 0 || std::abs(dx) >= std::abs(dy)) state_ = State::Ignored;
       } else {
         tick(now_ms);
+      }
+      break;
+    case State::MascotDrag:
+      if (std::abs(dx) >= cfg_.swipe_px && std::abs(dx) > std::abs(dy)) {
+        app_.swipe_mascot(dx);
+        state_ = State::Ignored;
+      } else if (std::abs(dy) > cfg_.swipe_px || std::abs(dy) >= std::abs(dx)) {
+        state_ = State::Ignored;
       }
       break;
     case State::Talk:
