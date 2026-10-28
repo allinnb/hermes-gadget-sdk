@@ -58,7 +58,7 @@ void TimePort::begin(const RtcConfig& cfg, i2c_master_bus_handle_t bus, hg::Stor
 
 void TimePort::apply_timezone(hg::Storage& storage) {
   auto stored = storage.get("timezone");
-  const std::string tz = stored && !stored->empty() ? *stored : "UTC0";
+  const std::string tz = stored && !stored->empty() ? *stored : "CST-8";
   setenv("TZ", tz.c_str(), 1);
   tzset();
   ESP_LOGI(TAG, "timezone %s", tz.c_str());
