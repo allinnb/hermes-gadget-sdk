@@ -422,7 +422,7 @@ extern "C" void app_main(void) {
   parts.touch = touch && g_touch.has_touch();
   parts.key = touch && g_touch.has_key();
   parts.i2c = i2c_bus;
-  parts.imu = imu ? "qmi8658" : "none";
+  parts.imu = imu ? g_motion.name() : "none";
   parts.rtc = g_time.rtc_ready() ? "pcf85063" : "none";
   parts.motion = imu ? &g_motion : nullptr;
   parts.time = &g_time;

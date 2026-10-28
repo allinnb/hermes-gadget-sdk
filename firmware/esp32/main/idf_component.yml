@@ -15,6 +15,12 @@ dependencies:
   espressif/esp_codec_dev: "~1.5"
   # Opus reply audio: Xiph libopus (BSD-3-Clause) packaged for ESP-IDF
   78/esp-opus: "~1.0.5"
+  # BMI270 on the M5Stack StopWatch. The adapter is compiled only for that
+  # board; the managed Apache-2.0 component supplies the required config image.
+  espressif/bmi270:
+    version: "1.1.0"
+    rules:
+      - if: target in [esp32s3]
   espressif/esp_lcd_st77916: "~2.0.2"
   espressif/esp_lcd_sh8601: "^1"
   espressif/esp_lcd_ili9341: "^2.1.0"

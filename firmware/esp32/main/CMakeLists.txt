@@ -7,6 +7,10 @@ endif()
 set(HG_P4_SOURCES)
 set(HG_P4_REQUIRES)
 set(HG_RGB_REQUIRES)
+set(HG_IMU_REQUIRES)
+if(IDF_TARGET STREQUAL "esp32s3")
+    list(APPEND HG_IMU_REQUIRES bmi270)
+endif()
 if(IDF_TARGET STREQUAL "esp32p4")
     list(APPEND HG_P4_SOURCES
         "port_dsi.cpp"
@@ -76,6 +80,7 @@ idf_component_register(
         esp_lcd
         ${HG_RGB_REQUIRES}
         ${HG_P4_REQUIRES}
+        ${HG_IMU_REQUIRES}
         esp_netif
         esp_http_server
         esp_psram

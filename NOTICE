@@ -242,10 +242,14 @@ sequence, and physical-key behavior in firmware/esp32/main/board.cpp,
 port_m5ioe1.cpp and port_m5pm1.cpp were cross-checked against Meta's Muse Gadget
 SDK at commit e6fe5174092702ffddae6f90759a38d55a4ebae1,
 https://github.com/facebookincubator/muse-gadget-sdk, Apache License 2.0.
-The StopWatch motor's M5IOE1 PWM channel, 2 kHz frequency and 12-bit duty layout
-were also cross-checked against M5Stack M5Unified commit
-368ad60807161625aa65baad37a4a3af2a7eccea,
-https://github.com/m5stack/M5Unified, MIT License. Only hardware facts and
-behavior are reused; the Hermes Gadget drivers are an original ESP-IDF adapter.
-The existing LICENSES/Apache-2.0.txt supplies Muse's license text; this project's
-root MIT LICENSE covers the original adapter.
+The StopWatch motor's M5IOE1 PWM channel, 2 kHz frequency and 12-bit duty layout,
+and the BMI270's default StopWatch axis handling were also cross-checked against
+M5Stack M5Unified commit fd40d58, https://github.com/m5stack/M5Unified, MIT
+License. Only hardware facts and behavior are reused; the Hermes Gadget drivers
+are an original ESP-IDF adapter. The BMI270 implementation is the managed
+espressif/bmi270 component 1.1.0 from esp-bsp commit
+0c926f99ff4bc0f9d0631d92974d5f7798fa519a, Apache License 2.0; it supplies the
+configuration image required by the sensor. Managed-component licenses and
+notices are collected into firmware release archives. The existing
+LICENSES/Apache-2.0.txt supplies Muse's license text; this project's root MIT
+LICENSE covers the original adapter.

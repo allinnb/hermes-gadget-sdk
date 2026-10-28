@@ -951,6 +951,13 @@ BoardConfig make() {
   b.talk_label = "Blue";
   b.cancel_label = "Yellow";
 
+  // BMI270 at 0x68 on the always-on 3V3_L1 rail. M5Unified uses the raw axes
+  // for StopWatch, so start with identity mapping; diag/physical verification
+  // must confirm screen-up z ~= +1000 mg and face-down z ~= -1000 mg.
+  b.imu.enabled = true;
+  b.imu.chip = ImuChip::Bmi270;
+  b.imu.addr = 0x68;
+
   // Red short press toggles the display; hold 1.5 s opens/closes Settings.
   // No GPIO latch: power-off goes through M5PM1 PMIC SYS_CMD
   return b;

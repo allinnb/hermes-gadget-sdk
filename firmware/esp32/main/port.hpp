@@ -53,6 +53,9 @@
 #include "esp_lcd_types.h"
 #include "esp_lcd_touch.h"
 #include "esp_log.h"
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+#include "bmi270.h"
+#endif
 #include "esp_pm.h"
 #include "esp_websocket_client.h"
 #include "esp_http_server.h"
@@ -571,14 +574,14 @@ class TouchInput {
   volatile int64_t last_edge_us_ = INT64_MIN;  // per-edge debounce (ISR-written)
 };
 
-// Reads the QMI8658 at 10 Hz from its own task, on its own device handle on
-// the shared bus (ESP-IDF's i2c_master serialises the transactions), maps the
-// axes into the device frame and keeps EMA-smoothed milli-g in atomics. The
-// task never touches hg::App; the app task polls samples() and calls
-// App::on_motion directly.
+// Reads the configured accelerometer at 10 Hz from its own task on the shared
+// I2C bus, maps the axes into the device frame and keeps EMA-smoothed milli-g
+// in atomics. The task never touches hg::App; the app task polls samples() and
+// calls App::on_motion directly.
 class MotionInput {
  public:
   bool begin(const ImuConfig& cfg, i2c_master_bus_handle_t bus);
+  const char* name() const { return name_; }
   // Latest smoothed sample for `diag` (0, 0, 0 before the first good read).
   void latest(int16_t& x, int16_t& y, int16_t& z) const;
   // Counts good reads: the app task forwards a sample only when this moved, so a
@@ -587,9 +590,14 @@ class MotionInput {
 
  private:
   static void task(void* arg);
+  bool read(int16_t mg[3]);
   ImuConfig cfg_{};
   i2c_master_dev_handle_t dev_ = nullptr;
-  std::unique_ptr<hg::Qmi8658> chip_;
+  std::unique_ptr<hg::Qmi8658> qmi_;
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  bmi270_handle_t* bmi_ = nullptr;
+#endif
+  const char* name_ = "none";
   std::atomic<int16_t> x_{0}, y_{0}, z_{0};
   std::atomic<uint32_t> samples_{0};
 };
