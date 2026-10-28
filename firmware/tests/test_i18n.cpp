@@ -126,11 +126,11 @@ TEST("i18n: weekday and month names are at most 3 columns in every language") {
   }
 }
 
-TEST("i18n: folding to the font keeps Latin-1 and replaces the rest") {
+TEST("i18n: folding keeps drawable Unicode and replaces only missing glyphs") {
   using hg::i18n::fold_to_font;
   CHECK_EQ(fold_to_font("¿Cómo estás? ¡Sí! Ñandú"), std::string("¿Cómo estás? ¡Sí! Ñandú"));
-  CHECK_EQ(fold_to_font("“quoted” – it’s…"), std::string("\"quoted\" - it's..."));
-  CHECK_EQ(fold_to_font("日本 🙂"), std::string("?? ?"));
+  CHECK_EQ(fold_to_font("“quoted” – it’s…"), std::string("“quoted” - it’s…"));
+  CHECK_EQ(fold_to_font("日本 🙂"), std::string("日本 ?"));
   CHECK_EQ(fold_to_font("a\xC3"), std::string("a?"));
   CHECK_EQ(fold_to_font("line\nbreak"), std::string("line\nbreak"));
 }
