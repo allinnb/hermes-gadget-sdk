@@ -1143,6 +1143,26 @@ TEST("app: long replies page themselves; UP/DOWN pauses the paging") {
   CHECK(r.app.model().hero);
 }
 
+TEST("app: StopWatch Ready hero exposes local time and profile for the compact status strip") {
+  hg::DeviceProfile profile = Rig::profile("ws://hermes.local:8765/gadget");
+  profile.ready_status_strip = true;
+  Rig r(profile);
+  r.fake.make_round(466);
+  r.fake.wall_ok = true;
+  r.fake.wall.hour = 9;
+  r.fake.wall.minute = 41;
+  r.fake.kv["battery_display"] = "off";  // keep this model-only test independent of a Power fake
+  r.bring_online_with_profiles(true, "ops");
+  r.advance(100);
+  CHECK_EQ(r.app.model().ready_time, std::string("09:41"));
+  CHECK_EQ(r.app.model().ready_profile, std::string("Ops"));
+  CHECK(r.app.model().hero);
+
+  r.app.on_button(hg::Button::Talk, true);
+  CHECK(r.app.model().ready_time.empty());
+  CHECK(r.app.model().ready_profile.empty());
+}
+
 TEST("app: on a round panel everything stays inside the circle") {
   Rig r;
   r.fake.make_round(466);
@@ -2077,6 +2097,25 @@ TEST("power: failed readings replace stale data and shutdown requires a second l
   CHECK_EQ(battery.shutdowns, 1);
 }
 
+TEST("battery indicator: a watch status profile defaults to icon and percentage, but stored off wins") {
+  struct FixedPower : hg::Power {
+    std::optional<hg::PowerStatus> read() override { return hg::PowerStatus{true, 3900, 65, false, false}; }
+    bool power_off() override { return false; }
+  } battery;
+  hg::DeviceProfile profile = Rig::profile("ws://hermes.local:8765/gadget");
+  profile.ready_status_strip = true;
+  Rig r(profile);
+  r.hal.power = &battery;
+  r.bring_online(true);
+  r.advance(2100);
+  CHECK_EQ(int(r.app.model().battery), 65);
+  CHECK(r.app.model().battery_icon);
+  CHECK(r.app.model().battery_text);
+
+  CHECK_EQ(r.app.console("set battery_display off"), std::string("@ok battery_display"));
+  CHECK_EQ(int(r.app.model().battery), -1);
+}
+
 TEST("battery indicator: the top band shows the level, colours charging and low, and hides without a reading") {
   for (bool round : {false, true}) {
     FakeHal display;
@@ -2148,6 +2187,34 @@ TEST("battery indicator: the top band shows the level, colours charging and low,
       CHECK(min_y < 20);
     }
   }
+}
+
+TEST("display: a round Ready status strip draws time and profile inside the circle") {
+  FakeHal display;
+  display.make_round(466);
+  hg::Ui ui(display);
+  hg::UiModel m;
+  m.screen = hg::Screen::Ready;
+  m.link = hg::Link::Online;
+  m.hero = true;
+  ui.render(m);
+  const auto plain = display.fb;
+
+  m.ready_time = "09:41";
+  m.ready_profile = "Ops";
+  ui.render(m);
+  CHECK(display.fb != plain);
+  int changed = 0, stray = 0;
+  for (int y = 0; y < 68; ++y) {
+    for (int x = 0; x < 466; ++x) {
+      if (display.fb[static_cast<size_t>(y * 466 + x)] == plain[static_cast<size_t>(y * 466 + x)]) continue;
+      ++changed;
+      const int dx = 2 * x + 1 - 466, dy = 2 * y + 1 - 466;
+      stray += dx * dx + dy * dy > 466 * 466;
+    }
+  }
+  CHECK(changed > 20);
+  CHECK_EQ(stray, 0);
 }
 
 TEST("display: an emissive panel leaves its background unlit; a backlit one keeps near black") {
@@ -3396,8 +3463,8 @@ TEST("language: English by default, and set language switches the device's own t
 TEST("language: an unknown code is refused and changes nothing") {
   Rig r;
   r.bring_online(true);
-  CHECK_EQ(r.app.console("set language xx"), std::string("@error language must be one of: en es auto"));
-  CHECK_EQ(r.app.console("set language ES"), std::string("@error language must be one of: en es auto"));
+  CHECK_EQ(r.app.console("set language xx"), std::string("@error language must be one of: en es zh auto"));
+  CHECK_EQ(r.app.console("set language ES"), std::string("@error language must be one of: en es zh auto"));
   CHECK(r.fake.kv.find("language") == r.fake.kv.end());
   CHECK_EQ(r.app.model().headline, std::string("Hi, I'm Hermes"));
   // A stored value this firmware doesn't know (from a newer one) reads as English.
@@ -3429,6 +3496,12 @@ TEST("language: the settings menu has a Language item that steps through the lan
   CHECK_EQ(r.app.model().headline, std::string("Ajustes"));
   CHECK_EQ(r.app.model().detail, std::string("Idioma / Language"));  // the way back stays readable
   CHECK(r.app.model().body.find("Español") != std::string::npos);
+  r.app.console("talk");
+  r.app.console("release");
+  CHECK_EQ(r.fake.kv["language"], std::string("zh"));
+  CHECK_EQ(r.app.model().headline, std::string("设置"));
+  CHECK_EQ(r.app.model().detail, std::string("语言 / Language"));
+  CHECK(r.app.model().body.find("简体中文") != std::string::npos);
   r.app.console("talk");
   r.app.console("release");
   CHECK_EQ(r.fake.kv["language"], std::string("auto"));  // after the last translation: follow Hermes
@@ -3463,7 +3536,7 @@ TEST("language: the agent can set it through the screen.language action") {
   CHECK_EQ(r.app.model().headline, std::string("Hola, soy Hermes"));
   r.server(R"({"type":"action","id":"l2","name":"screen.language","args":{"language":"klingon"}})");
   res = r.fake.last("action.result");
-  CHECK(res && !(*res)["ok"].as_bool() && (*res)["error"].as_string() == "language must be one of: en es auto");
+  CHECK(res && !(*res)["ok"].as_bool() && (*res)["error"].as_string() == "language must be one of: en es zh auto");
   r.server(R"({"type":"action","id":"l3","name":"screen.language","args":{}})");
   res = r.fake.last("action.result");
   CHECK(res && !(*res)["ok"].as_bool());

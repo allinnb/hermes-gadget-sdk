@@ -55,6 +55,9 @@ struct DeviceProfile {
   // A motion sensor feeds App::on_motion 5-25 times a second. Boards with one
   // and a backlit display can sleep while lying face down (face_down_sleep).
   bool motion_sensor = false;
+  // A compact time/link/profile strip in the top band of the Ready hero. Intended
+  // for watch-shaped boards; other profiles keep the standard top band.
+  bool ready_status_strip = false;
   // Board-specific settings the console accepts besides the core ones. Changes
   // reach the port through App::on_setting_changed.
   std::vector<std::string> extra_settings;

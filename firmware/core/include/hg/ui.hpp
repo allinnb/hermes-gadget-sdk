@@ -99,6 +99,9 @@ struct UiModel {
   // that picks the burn-in shift. No seconds: the face changes once a minute.
   std::string clock_time, clock_date;
   uint8_t clock_minute = 0;
+  // Ready hero on watch-shaped boards: compact time and current profile beside
+  // the existing link dot. Empty strings preserve the standard top band.
+  std::string ready_time, ready_profile;
 };
 
 struct UiLayout {

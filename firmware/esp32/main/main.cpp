@@ -455,6 +455,9 @@ extern "C" void app_main(void) {
   profile.frame_budget_us = CONFIG_HG_FRAME_BUDGET_US;
   profile.frame_log_ms = CONFIG_HG_FRAME_LOG_S * 1000u;
   profile.default_name = CONFIG_HG_DEFAULT_NAME;
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  profile.ready_status_strip = true;
+#endif
 #if CONFIG_SPIRAM
   profile.faces = esp_psram_is_initialized();
 #else

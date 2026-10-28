@@ -413,7 +413,8 @@ void Ui::draw_frame(const UiModel& m) {
   // A rectangular top bar's line fills with the timer: its width in pixels, or -1 with no timer.
   const int top_fill = !panel_.round && m.timer_permille >= 0 ? info_.width * m.timer_permille / 1000 : -1;
   uint32_t hashes[4];
-  hashes[0] = Hash().add(m.title).val(m.lang).val(m.link).val(panel_.round && m.screen == Screen::Settings).val(panel_.round && m.settings_hold)
+  hashes[0] = Hash().add(m.title).add(m.ready_time).add(m.ready_profile).val(m.lang).val(m.link)
+                  .val(panel_.round && m.screen == Screen::Settings).val(panel_.round && m.settings_hold)
                   .val(panel_.round ? int8_t(-1) : m.battery).val(!panel_.round && m.battery_charging)
                   .val(!panel_.round && m.battery_icon).val(!panel_.round && m.battery_text)
                   .val(!panel_.round && m.battery_low).val(top_fill).get();
@@ -499,7 +500,14 @@ void Ui::draw_top(Canvas& c, const UiModel& m) {
     // The settings hold target: a dim label under the link dot, with no bar
     // behind it. The label line (2r + 4s .. 2r + 13s) fits the band.
     int r = std::max(2, 3 * s / 2 + 1);
-    if (m.settings_hold) {
+    if (!m.ready_time.empty() || !m.ready_profile.empty()) {
+      const int pad = 2 * s;
+      if (!m.ready_time.empty()) c.text(pad, 0, fit(m.ready_time, cols_for(w / 2 - 3 * s, s)), s, kText);
+      if (!m.ready_profile.empty()) {
+        const std::string profile = fit(m.ready_profile, cols_for(w / 2 - 3 * s, s));
+        c.text(w - pad - Canvas::text_width(profile, s), 0, profile, s, kDim);
+      }
+    } else if (m.settings_hold) {
       const char* control =
           i18n::text(m.lang, m.screen == Screen::Settings ? i18n::Msg::BackToHermesTarget : i18n::Msg::SettingsTarget);
       c.text((w - Canvas::text_width(control, s)) / 2, 2 * r + 4 * s, control, s, kDim);

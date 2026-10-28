@@ -142,7 +142,7 @@ void App::load_settings() {
   brightness_ = static_cast<uint8_t>(std::max(5, std::min(100, std::atoi(setting("brightness", "100").c_str()))));
   // The panel level itself is applied once, below, after the sleep flags clear.
   screen_timeout_ms_ = static_cast<uint32_t>(std::max(0, std::min(3600, std::atoi(setting("screen_timeout", "0").c_str())))) * 1000;
-  const std::string indicator = setting("battery_display", "off");
+  const std::string indicator = setting("battery_display", profile_.ready_status_strip ? "both" : "off");
   battery_display_ = indicator == "icon" ? BatteryIndicator::Icon
                        : indicator == "percentage" ? BatteryIndicator::Percentage
                        : indicator == "both" ? BatteryIndicator::Both : BatteryIndicator::Off;
@@ -1727,6 +1727,8 @@ void App::update_model() {
   m.code.clear();
   m.clock_time.clear();
   m.clock_date.clear();
+  m.ready_time.clear();
+  m.ready_profile.clear();
   m.detail.clear();
   m.body.clear();
   m.yes.clear();
@@ -1975,6 +1977,10 @@ void App::update_model() {
         m.detail = tr(m.name_target ? Msg::ProfileTapName : Msg::ProfileInSettings) +
                    ((sessions || timing) ? "\n" + m.detail : "");
         m.caption_lines = 2;
+      }
+      if (profile_.ready_status_strip) {
+        if (wall_valid_) m.ready_time = clock_time_text(wall_, clock_24h_);
+        m.ready_profile = agent_profile_name();
       }
     }
     if (clock_showing_) {
