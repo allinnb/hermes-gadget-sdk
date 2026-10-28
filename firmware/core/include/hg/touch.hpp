@@ -4,8 +4,9 @@
 //   hold the title     local settings after one second
 //   hold elsewhere     TALK, held for as long as the finger stays down (on the name too)
 //   quick tap          a TALK press and release (answers "yes" to a question); on the
-//                      name under the mascot it opens the profile list instead; on the
-//                      resting clock it does nothing (the touch-down brought Ready back)
+//                      name under the mascot it opens the profile list instead; a board
+//                      may make the Ready mascot react locally; on the resting clock it
+//                      does nothing (the touch-down brought Ready back)
 //   tap a list row     asks Hermes for that profile
 //   swipe down         a CANCEL press and release (discard, close, stop, "no")
 //
@@ -50,6 +51,7 @@ class TouchGestures {
   State state_ = State::Idle;
   int x0_ = 0, y0_ = 0;
   bool on_name_ = false;     // a Pending touch that started on the profile name
+  bool on_mascot_ = false;   // a Pending touch that started on the interactive Ready mascot
   bool from_clock_ = false;  // the touch began on the clock face, which the touch-down ended
   uint32_t t0_ = 0;
 };

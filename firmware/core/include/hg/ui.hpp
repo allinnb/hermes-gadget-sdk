@@ -84,6 +84,7 @@ struct UiModel {
   bool hero = false;
   uint8_t caption_lines = 1;  // hero: lines the detail may wrap to (then "..")
   bool name_target = false;   // hero: the caption sits in a panel that a tap opens the profile list from
+  bool mascot_reacting = false;  // hero: a quick tap holds the blink frame briefly
   const mascot::Face* face = nullptr;  // drawn instead of the mascot; borrowed like `qr`
   // Wi-Fi setup: a scannable code for the temporary network, drawn centred in
   // the content band. Null on every other screen. Borrowed, not owned: the app
@@ -151,6 +152,7 @@ class Ui {
   // there (-1: none, kMoreRow: the next page). profile_next_page gives that page's first item.
   static constexpr int kMoreRow = -2;
   bool name_hit(const UiModel& m, int x, int y) const;
+  bool mascot_hit(const UiModel& m, int x, int y) const;
   int profile_row_hit(const UiModel& m, int x, int y) const;
   int profile_next_page(const UiModel& m) const;
   bool title_hit(int x, int y) const {

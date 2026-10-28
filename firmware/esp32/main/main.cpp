@@ -457,6 +457,7 @@ extern "C" void app_main(void) {
   profile.default_name = CONFIG_HG_DEFAULT_NAME;
 #if CONFIG_HG_BOARD_M5STACK_STOPWATCH
   profile.ready_status_strip = true;
+  profile.mascot_touch_reaction = true;
 #endif
 #if CONFIG_SPIRAM
   profile.faces = esp_psram_is_initialized();
@@ -516,6 +517,9 @@ extern "C" void app_main(void) {
   app.on_wifi_setup_close = [] { g_wifi.stop_setup(); };
   app.on_wifi_setup_ap = [] { return g_wifi.setup_ap(); };
   app.current_wifi = [] { return g_wifi.current(); };
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  app.on_mascot_touch = [] { hgp::m5ioe1().pulse_vibration(42, 32, g_system.now_ms()); };
+#endif
   app.on_diag = [](hg::json::Value& report) {
     hgp::diag::report(report);
     report.set("ota", g_updater.describe());

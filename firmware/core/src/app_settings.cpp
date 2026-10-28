@@ -16,6 +16,23 @@ bool App::settings_title_hit(int x, int y) const {
   return ui_ && settings_hold_live() && ui_->title_hit(x, y);
 }
 
+bool App::mascot_hit(int x, int y) const {
+  return profile_.mascot_touch_reaction && ui_ && mode_ == Mode::Idle && overlay_ == Overlay::None &&
+         ui_->mascot_hit(model_, x, y);
+}
+
+bool App::react_to_mascot() {
+  if (!profile_.mascot_touch_reaction || model_.screen != Screen::Ready || !model_.hero || mode_ != Mode::Idle ||
+      overlay_ != Overlay::None)
+    return false;
+  // Hold the blink long enough to read as a deliberate response, but shorter than
+  // a normal interaction beat. The port may pair it with a non-blocking haptic cue.
+  mascot_reaction_until_ = now() + 650;
+  if (on_mascot_touch) on_mascot_touch();
+  update_model();
+  return true;
+}
+
 bool App::open_settings() {
   // The alarm too: a hold that began just before it rang must not cover it and silence it.
   if (face_down_ || prompt_showing() || ota_busy() || ota_ == Ota::Restarting || !wifi_setup_text_.empty() ||

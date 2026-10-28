@@ -6,6 +6,7 @@
 
 - M5Stack StopWatch now uses its M5IOE1-driven vibration motor for short, non-blocking tactile cues on TALK/CANCEL input, red-key sleep/Settings actions, and the start of a Hermes reply. The motor is stopped from the app loop instead of delaying input, rendering, or audio work.
 - The M5Stack StopWatch Ready screen now keeps a compact local-time, link-status and active-profile strip above the mascot. Other boards retain the standard header, and the full resting clock remains unchanged.
+- A quick tap directly on the StopWatch Ready mascot now plays a short blink and tactile response without starting a recording; holding the same target still starts TALK normally.
 
 ## 0.4.1
 

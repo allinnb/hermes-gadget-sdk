@@ -1711,6 +1711,11 @@ void App::tick() {
   timer_tick();
   perf_tick();
 
+  if (mascot_reaction_until_ && static_cast<int32_t>(t - mascot_reaction_until_) >= 0) {
+    mascot_reaction_until_ = 0;
+    update_model();
+  }
+
   if (t - frame_at_ >= kFrameMs) {
     frame_at_ = t;
     // The port's time of day feeds the clock face; read once per frame.
@@ -1738,6 +1743,7 @@ void App::update_model() {
   m.dash.clear();
   m.hero = false;
   m.name_target = false;
+  m.mascot_reacting = mascot_reaction_until_ && static_cast<int32_t>(mascot_reaction_until_ - now()) > 0;
   m.caption_lines = 1;
   m.scroll = scroll_;
   m.level = level_;

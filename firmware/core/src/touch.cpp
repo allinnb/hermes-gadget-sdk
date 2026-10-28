@@ -27,6 +27,7 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
           app_.open_profile_picker();
           break;
         }
+        if (on_mascot_ && app_.react_to_mascot()) break;
         press(Button::Talk);
         release(Button::Talk);
         break;
@@ -48,6 +49,7 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
               : !from_clock_ && app_.settings_title_hit(x, y) ? State::Settings
               : State::Pending;
     on_name_ = !from_clock_ && state_ == State::Pending && app_.profile_name_hit(x, y);
+    on_mascot_ = !from_clock_ && state_ == State::Pending && !on_name_ && app_.mascot_hit(x, y);
     x0_ = x;
     y0_ = y;
     t0_ = now_ms;

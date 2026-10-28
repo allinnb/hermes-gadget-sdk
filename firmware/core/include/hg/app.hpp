@@ -58,6 +58,9 @@ struct DeviceProfile {
   // A compact time/link/profile strip in the top band of the Ready hero. Intended
   // for watch-shaped boards; other profiles keep the standard top band.
   bool ready_status_strip = false;
+  // A quick tap on the Ready mascot plays a local reaction instead of starting
+  // tap-to-talk. A hold still becomes TALK after the normal gesture threshold.
+  bool mascot_touch_reaction = false;
   // Board-specific settings the console accepts besides the core ones. Changes
   // reach the port through App::on_setting_changed.
   std::vector<std::string> extra_settings;
@@ -130,6 +133,8 @@ class App {
   // Touch: a quick tap on the name under the mascot opens the list of profiles;
   // a tap on a row asks for that profile; CANCEL (swipe down) closes it.
   bool profile_name_hit(int x, int y) const;
+  bool mascot_hit(int x, int y) const;
+  bool react_to_mascot();
   bool open_profile_picker();
   bool profile_picker_open() const { return overlay_ == Overlay::Profiles; }
   bool profile_switch_pending() const { return !profile_pending_.empty(); }
@@ -178,6 +183,8 @@ class App {
   std::function<bool()> on_phone_pair;
   std::function<void()> on_phone_pair_close;
   std::function<void()> on_phone_forget;  // removes every paired phone
+  // Optional board feedback for a quick tap on the Ready mascot.
+  std::function<void()> on_mascot_touch;
 
   // Serial-console command (provisioning, bench automation). Returns the
   // response; machine-readable lines start with '@'.
@@ -367,6 +374,7 @@ class App {
   std::vector<AgentProfile> agent_profiles_;  // offered in welcome; empty = no switching
   std::string agent_profile_ = "default";
   std::optional<mascot::Face> face_;  // agent_profile_'s, from Hermes; kept through reconnects
+  uint32_t mascot_reaction_until_ = 0;
   // A profile.select awaiting Hermes's answer; one at a time (empty: none).
   std::string profile_pending_;
   uint32_t profile_pending_at_ = 0;

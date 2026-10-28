@@ -140,6 +140,7 @@ mascot::Frame mascot_frame(const UiModel& m) {
   if (m.screen == Screen::Responding && m.speaking) {
     return (m.frame / 2) % 2 ? mascot::Frame::Talk : mascot::Frame::Idle;
   }
+  if (m.mascot_reacting) return mascot::Frame::Blink;
   return m.frame % 45 < 2 ? mascot::Frame::Blink : mascot::Frame::Idle;  // blink every ~4.5 s
 }
 
@@ -857,6 +858,12 @@ int Ui::name_marker_x() const {
 }
 
 bool Ui::name_hit(const UiModel& m, int x, int y) const { return name_rect(m).has(x - ox_, y - oy_); }
+
+bool Ui::mascot_hit(const UiModel& m, int x, int y) const {
+  if (!m.hero || m.screen != Screen::Ready) return false;
+  const HeroGeom g = hero_geom(m);
+  return Rect{g.x, g.y, g.size, g.size}.has(x - ox_, y - oy_);
+}
 
 // Rows at least a finger tall. When they do not all fit, a page shows what does, starting at
 // item m.scroll, and its last row is More.

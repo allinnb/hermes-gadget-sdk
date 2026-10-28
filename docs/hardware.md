@@ -227,7 +227,7 @@ Use `m5stack-stopwatch` for the M5Stack StopWatch with ESP32-S3R8, 16 MB flash a
 
 Hold the blue key to talk and release it to send. The yellow key cancels in normal use and advances through Settings; the blue key confirms a Settings item. A red-key short press turns the screen off or on while the device remains running. Holding red for about 1.5 seconds opens or closes Settings; the PMIC retains its longer emergency power behavior. The title-bar hold and touch gestures remain available.
 
-The vibration motor gives short tactile cues when TALK is pressed or released, CANCEL is pressed, the red key is pressed or held to toggle Settings, and Hermes starts showing a reply. Pulses are non-blocking: a later cue replaces an active one, and the app loop stops the PWM at its deadline.
+The vibration motor gives short tactile cues when TALK is pressed or released, CANCEL is pressed, the red key is pressed or held to toggle Settings, Hermes starts showing a reply, and the Ready mascot is tapped. A quick tap directly on the mascot blinks it without recording; holding the same area still becomes TALK after the normal gesture threshold. Pulses are non-blocking: a later cue replaces an active one, and the app loop stops the PWM at its deadline.
 
 The M5IOE1 adapter sequences the display, touch and audio supplies and resets before those peripherals start. The M5PM1 adapter reports raw battery voltage and external-power presence and provides local software shutdown; battery percentage and charge state are not claimed. The amplifier currently remains enabled after startup because the shared codec port accepts only a native GPIO PA control.
 

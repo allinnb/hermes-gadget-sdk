@@ -1187,6 +1187,45 @@ TEST("app: on a round panel everything stays inside the circle") {
   CHECK(drawn > 1000);  // and the reply really was drawn inside
 }
 
+TEST("touch: a quick Ready mascot tap reacts locally, while a hold still talks") {
+  hg::DeviceProfile profile = Rig::touch_profile();
+  profile.mascot_touch_reaction = true;
+  Rig r(profile);
+  r.fake.make_round(466);
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  int reactions = 0;
+  r.app.on_mascot_touch = [&] { ++reactions; };
+
+  CHECK(r.app.mascot_hit(233, 220));
+  touch.update(true, 233, 220, r.fake.clock);
+  r.advance(40);
+  touch.update(false, 0, 0, r.fake.clock);
+  CHECK_EQ(reactions, 1);
+  CHECK(r.app.model().mascot_reacting);
+  CHECK(!r.fake.mic_on);
+  CHECK(r.fake.last("audio.start") == nullptr);
+  r.advance(700);
+  CHECK(!r.app.model().mascot_reacting);
+
+  touch.update(true, 233, 220, r.fake.clock);
+  r.advance(150);
+  touch.tick(r.fake.clock);
+  CHECK(r.fake.mic_on);
+  CHECK_EQ(reactions, 1);
+  touch.update(false, 0, 0, r.fake.clock);
+}
+
+TEST("touch: boards without the mascot reaction keep quick-tap TALK") {
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  touch.update(true, 160, 120, r.fake.clock);
+  r.advance(40);
+  touch.update(false, 0, 0, r.fake.clock);
+  CHECK(r.fake.last("audio.start") != nullptr);
+}
+
 TEST("touch: hold to talk, lift to send") {
   Rig r(Rig::touch_profile());
   r.bring_online(true);
@@ -2205,7 +2244,9 @@ TEST("display: a round Ready status strip draws time and profile inside the circ
   ui.render(m);
   CHECK(display.fb != plain);
   int changed = 0, stray = 0;
-  for (int y = 0; y < 68; ++y) {
+  // A round panel's UI origin is the inscribed square: on 466 px, its top band is
+  // physical rows 68..103 rather than the circular cap above it.
+  for (int y = 68; y < 104; ++y) {
     for (int x = 0; x < 466; ++x) {
       if (display.fb[static_cast<size_t>(y * 466 + x)] == plain[static_cast<size_t>(y * 466 + x)]) continue;
       ++changed;
@@ -4014,8 +4055,13 @@ TEST("language: auto follows the language Hermes names in welcome") {
   }
 }
 
-TEST("language: auto is English when Hermes names none, or one this firmware lacks") {
-  for (const char* id : {"", "pt-br", "zh-hant", "x"}) {
+TEST("language: auto follows Chinese script tags and stays English for unsupported languages") {
+  Rig chinese;
+  chinese.fake.kv["language"] = "auto";
+  welcome_with_language(chinese, "zh-hant");
+  CHECK(chinese.app.model().lang == hg::i18n::Lang::Zh);
+
+  for (const char* id : {"", "pt-br", "ja-jp", "x"}) {
     Rig r;
     r.fake.kv["language"] = "auto";
     welcome_with_language(r, id);
