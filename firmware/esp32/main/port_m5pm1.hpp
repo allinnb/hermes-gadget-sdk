@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 #include "driver/i2c_master.h"
@@ -28,6 +29,8 @@ class M5PM1Power final : public hg::Power {
   // display; a 1.5 s hold opens or closes Settings. The PMIC retains its 4 s
   // emergency shutdown behavior.
   void poll(hg::App& app, uint32_t now_ms);
+  // false on the initial press, true when the 1.5 s Settings hold fires.
+  std::function<void(bool)> on_key_action;
 
  private:
   bool read8(uint8_t reg, uint8_t& value);

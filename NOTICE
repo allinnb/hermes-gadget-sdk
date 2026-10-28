@@ -242,6 +242,10 @@ sequence, and physical-key behavior in firmware/esp32/main/board.cpp,
 port_m5ioe1.cpp and port_m5pm1.cpp were cross-checked against Meta's Muse Gadget
 SDK at commit e6fe5174092702ffddae6f90759a38d55a4ebae1,
 https://github.com/facebookincubator/muse-gadget-sdk, Apache License 2.0.
-Only hardware facts and behavior are reused; the Hermes Gadget drivers are an
-original ESP-IDF adapter. The existing LICENSES/Apache-2.0.txt supplies the
-license text.
+The StopWatch motor's M5IOE1 PWM channel, 2 kHz frequency and 12-bit duty layout
+were also cross-checked against M5Stack M5Unified commit
+368ad60807161625aa65baad37a4a3af2a7eccea,
+https://github.com/m5stack/M5Unified, MIT License. Only hardware facts and
+behavior are reused; the Hermes Gadget drivers are an original ESP-IDF adapter.
+The existing LICENSES/Apache-2.0.txt supplies Muse's license text; this project's
+root MIT LICENSE covers the original adapter.

@@ -9,8 +9,9 @@
 //   0x05  OUT    — output latch value
 //   0x07  IN     — read actual pin levels
 //   0x13  OD     — open-drain enable
-//   0x1B  PWM1_DUTY — vibration motor PWM (bit15 = enable)
+//   0x1B  PWM1_DUTY — vibration motor PWM (12-bit duty, bit15 = enable)
 //   0x23  I2C_CFG
+//   0x25  PWM_FREQ — shared PWM frequency in Hz
 //
 // Power-on sequence (enforced by M5IOE1::power_sequence()):
 //   1. PYG3  (IOE_AUDIO) + PYG8 (IOE_L3B)  → HIGH  (codec + AMOLED supply)
@@ -48,7 +49,8 @@ class M5IOE1 {
   static constexpr uint8_t REG_IN        = 0x07;
   static constexpr uint8_t REG_OD        = 0x13;
   static constexpr uint8_t REG_PWM_DUTY  = 0x1B;
-  static constexpr uint8_t REG_I2C_CFG  = 0x23;
+  static constexpr uint8_t REG_I2C_CFG   = 0x23;
+  static constexpr uint8_t REG_PWM_FREQ  = 0x25;
 
   // Initialise, configure directions and run power-on sequence.
   // Call once after the I2C bus master is created, before amoled/touch/codec begin().
@@ -59,11 +61,16 @@ class M5IOE1 {
   // Called from the pa_gpio callback set up in port_codec.cpp.
   esp_err_t set_amp(bool on);
 
-  // Optional: pulse the vibration motor for duration_ms milliseconds.
-  esp_err_t vibrate(uint16_t duty_pct, uint32_t duration_ms);
+  // Start or replace a non-blocking vibration pulse. Call tick() from the app
+  // loop to stop it at the deadline; duty_pct is clamped to 0..100.
+  esp_err_t pulse_vibration(uint16_t duty_pct, uint32_t duration_ms, uint32_t now_ms);
+  void tick(uint32_t now_ms);
+  esp_err_t stop_vibration();
 
  private:
   i2c_master_dev_handle_t dev_ = nullptr;
+  bool ready_ = false;
+  uint32_t vibration_off_at_ = 0;
 
   esp_err_t write_reg16(uint8_t reg, uint16_t val);
   esp_err_t read_reg16(uint8_t reg, uint16_t& val);

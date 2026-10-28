@@ -221,11 +221,13 @@ Use `m5stack-stopwatch` for the M5Stack StopWatch with ESP32-S3R8, 16 MB flash a
 | CST820 touch | Shared I2C at 0x15; reset through M5IOE1; polled |
 | I2C | SDA 47, SCL 48, 400 kHz |
 | ES8311 microphone and speaker | MCLK 18, BCLK 17, WS 15, DOUT 21, DIN 16; AW8737A enable through M5IOE1 |
-| M5IOE1 / M5PM1 | I2C 0x4F / 0x6E; M5PM1 IRQ is active-low on GPIO 12 |
+| M5IOE1 / M5PM1 | I2C 0x4F / 0x6E; M5IOE1 PWM1 drives the G9 vibration motor at 2 kHz; M5PM1 IRQ is active-low on GPIO 12 |
 | Blue / yellow keys | Active-low GPIO 1 TALK / GPIO 2 CANCEL and Settings navigation |
 | Red key | Read from M5PM1; short press sleeps or wakes the screen; hold 1.5 seconds to open or close Settings |
 
 Hold the blue key to talk and release it to send. The yellow key cancels in normal use and advances through Settings; the blue key confirms a Settings item. A red-key short press turns the screen off or on while the device remains running. Holding red for about 1.5 seconds opens or closes Settings; the PMIC retains its longer emergency power behavior. The title-bar hold and touch gestures remain available.
+
+The vibration motor gives short tactile cues when TALK is pressed or released, CANCEL is pressed, the red key is pressed or held to toggle Settings, and Hermes starts showing a reply. Pulses are non-blocking: a later cue replaces an active one, and the app loop stops the PWM at its deadline.
 
 The M5IOE1 adapter sequences the display, touch and audio supplies and resets before those peripherals start. The M5PM1 adapter reports raw battery voltage and external-power presence and provides local software shutdown; battery percentage and charge state are not claimed. The amplifier currently remains enabled after startup because the shared codec port accepts only a native GPIO PA control.
 
@@ -238,9 +240,9 @@ For ESP-IDF, use `SDKCONFIG_DEFAULTS="sdkconfig.defaults;boards/m5stack-stopwatc
 
 ### First flash: what to check
 
-Confirm the log identifies `m5stack-stopwatch`, 16 MB flash and octal PSRAM; the display is upright with correct colours; I2C devices 0x15, 0x18, 0x4F and 0x6E answer; microphone, speaker and touch initialize; and every blue, yellow and red key action works. Then complete the [physical checklist](hardware-validation.md), including a real voice turn, audio interruption, Wi-Fi recovery, battery-only behavior, software shutdown, OTA/rollback and a two-hour run.
+Confirm the log identifies `m5stack-stopwatch`, 16 MB flash and octal PSRAM; the display is upright with correct colours; I2C devices 0x15, 0x18, 0x4F and 0x6E answer; microphone, speaker and touch initialize; and every blue, yellow and red key action works. Check that each listed tactile cue is brief, distinct enough to notice, stops reliably, and never stalls key handling or reply audio. Then complete the [physical checklist](hardware-validation.md), including a real voice turn, audio interruption, Wi-Fi recovery, battery-only behavior, software shutdown, OTA/rollback and a two-hour run.
 
-Register and pin facts follow the [Muse Gadget SDK StopWatch board support](https://github.com/facebookincubator/muse-gadget-sdk/tree/e6fe5174092702ffddae6f90759a38d55a4ebae1) (Apache 2.0) and M5Stack's published device documentation. Only hardware facts and behavior are reused; this driver is an original ESP-IDF adapter. See [NOTICE](../NOTICE) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+Register and pin facts follow the [Muse Gadget SDK StopWatch board support](https://github.com/facebookincubator/muse-gadget-sdk/tree/e6fe5174092702ffddae6f90759a38d55a4ebae1) (Apache 2.0), [M5Unified commit `368ad608`](https://github.com/m5stack/M5Unified/tree/368ad60807161625aa65baad37a4a3af2a7eccea) (MIT), and M5Stack's published device documentation. Only hardware facts and behavior are reused; this driver is an original ESP-IDF adapter. See [NOTICE](../NOTICE) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
 ## ESP32-S3-Touch-AMOLED-1.75C
 

@@ -428,6 +428,21 @@ extern "C" void app_main(void) {
   parts.time = &g_time;
 #endif
   g_buttons.begin(board.buttons);
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  // Short, non-blocking tactile cues for the two side keys. A later pulse
+  // replaces an earlier one, so rapid input cannot queue seconds of vibration.
+  g_buttons.on_change = [](hg::Button button, bool pressed) {
+    const uint32_t now = g_system.now_ms();
+    if (button == hg::Button::Talk) {
+      hgp::m5ioe1().pulse_vibration(pressed ? 48 : 30, pressed ? 35 : 22, now);
+    } else if (button == hg::Button::Cancel && pressed) {
+      hgp::m5ioe1().pulse_vibration(42, 30, now);
+    }
+  };
+  g_m5pm1_power.on_key_action = [](bool held) {
+    hgp::m5ioe1().pulse_vibration(held ? 65 : 38, held ? 65 : 28, g_system.now_ms());
+  };
+#endif
   hgp::diag::set_parts(parts);
   hgp::diag::log_boot_summary();
 
@@ -522,6 +537,9 @@ extern "C" void app_main(void) {
   TickType_t motion_at = 0;     // last motion poll (the loop runs at ~10 ms)
   uint32_t motion_samples = 0;  // the motion task's count at the last forwarded sample
 #endif
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+  hg::Screen haptic_screen = app.screen();
+#endif
 
   for (;;) {
     hgp::Event ev;
@@ -544,11 +562,22 @@ extern "C" void app_main(void) {
     }
     g_buttons.poll(app);
 #if CONFIG_HG_BOARD_M5STACK_STOPWATCH
-    g_m5pm1_power.poll(app, g_system.now_ms());
+    const uint32_t now_ms = g_system.now_ms();
+    g_m5pm1_power.poll(app, now_ms);
+    hgp::m5ioe1().tick(now_ms);
 #endif
     g_wifi.tick(app, g_system.now_ms());
     if (g_gestures) g_gestures->tick(g_system.now_ms());
     app.tick();
+#if CONFIG_HG_BOARD_M5STACK_STOPWATCH
+    // One stronger pulse when Hermes starts presenting a reply. Track the
+    // screen edge instead of parsing protocol messages so text and audio
+    // replies behave alike and reconnects cannot trigger a false notification.
+    const hg::Screen next_haptic_screen = app.screen();
+    if (next_haptic_screen == hg::Screen::Responding && haptic_screen != hg::Screen::Responding)
+      hgp::m5ioe1().pulse_vibration(62, 70, g_system.now_ms());
+    haptic_screen = next_haptic_screen;
+#endif
 #if !CONFIG_HG_BOARD_ESP32_CYD
     // The motion task keeps the latest sample; poll it about every 100 ms instead
     // of letting 10 Hz events fill the queue. Only new reads go to the app, so a

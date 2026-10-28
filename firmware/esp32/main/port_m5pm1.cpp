@@ -136,15 +136,20 @@ void M5PM1Power::poll(hg::App& app, uint32_t now_ms) {
     key_down_ = true;
     key_held_ = false;
     key_down_at_ = now_ms;
+    if (on_key_action) on_key_action(false);
     ESP_LOGI(kTag, "red key down");
   } else if (down && !key_held_ && now_ms - key_down_at_ >= kSettingsHoldMs) {
     key_held_ = true;
+    bool changed = false;
     if (app.settings_open()) {
       app.close_settings();
+      changed = true;
       ESP_LOGI(kTag, "red key hold: Settings closed");
     } else if (app.open_settings()) {
+      changed = true;
       ESP_LOGI(kTag, "red key hold: Settings opened");
     }
+    if (changed && on_key_action) on_key_action(true);
   } else if (!down && key_down_) {
     key_down_ = false;
     if (!key_held_) {

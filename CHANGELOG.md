@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Firmware
+
+- M5Stack StopWatch now uses its M5IOE1-driven vibration motor for short, non-blocking tactile cues on TALK/CANCEL input, red-key sleep/Settings actions, and the start of a Hermes reply. The motor is stopped from the app loop instead of delaying input, rendering, or audio work.
+
 ## 0.4.1
 
 Hermes Gadget 0.4.1 fixes `hermes gadget update --latest`, which could install an older release over a device running newer firmware, such as a build from `main`. The firmware is unchanged from 0.4.0 apart from its version number.

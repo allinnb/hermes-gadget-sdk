@@ -711,6 +711,7 @@ class Buttons {
  public:
   void begin(const ButtonConfig& cfg);
   void poll(hg::App& app);  // call every ~10 ms from the app task
+  std::function<void(hg::Button, bool)> on_change;
 
  private:
   struct Button {

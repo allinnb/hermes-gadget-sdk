@@ -104,6 +104,10 @@ esp_err_t M5IOE1::begin(i2c_master_bus_handle_t bus) {
   if (err != ESP_OK) return err;
   err = write_reg16(REG_PWM_DUTY, 0x0000);
   if (err != ESP_OK) return err;
+  // M5Unified configures StopWatch's G9 motor on PWM1 at 2 kHz. The source
+  // reference is pinned in docs/hardware.md; this register stores Hz LE.
+  err = write_reg16(REG_PWM_FREQ, 2000);
+  if (err != ESP_OK) return err;
   err = set_bits(REG_OD, kOutputMask, false);
   if (err != ESP_OK) return err;
 
@@ -135,6 +139,7 @@ esp_err_t M5IOE1::begin(i2c_master_bus_handle_t bus) {
   err = set_bits(REG_OUT, IOE_SPK, true);
   if (err != ESP_OK) return err;
 
+  ready_ = true;
   ESP_LOGI(TAG, "M5IOE1 power sequence complete");
   return ESP_OK;
 }
@@ -143,15 +148,29 @@ esp_err_t M5IOE1::set_amp(bool on) {
   return set_bits(REG_OUT, IOE_SPK, on);
 }
 
-esp_err_t M5IOE1::vibrate(uint16_t duty_pct, uint32_t duration_ms) {
+esp_err_t M5IOE1::pulse_vibration(uint16_t duty_pct, uint32_t duration_ms, uint32_t now_ms) {
+  if (!ready_) return ESP_ERR_INVALID_STATE;
+  if (duty_pct == 0 || duration_ms == 0) return stop_vibration();
   if (duty_pct > 100) duty_pct = 100;
-  // PWM1_DUTY: bit15 = enable, bits[14:0] = duty (0–1023 maps to 0–100%)
-  const uint16_t duty_raw = static_cast<uint16_t>(duty_pct * 1023u / 100u);
-  esp_err_t err = write_reg16(REG_PWM_DUTY, 0x8000u | duty_raw);
-  if (err != ESP_OK) return err;
-  vTaskDelay(pdMS_TO_TICKS(duration_ms));
-  // Disable PWM
-  return write_reg16(REG_PWM_DUTY, 0x0000);
+  // PWM1_DUTY: bit15 = enable; the low 12 bits hold duty (0–4095).
+  const uint16_t duty_raw = static_cast<uint16_t>(duty_pct * 4095u / 100u);
+  const esp_err_t err = write_reg16(REG_PWM_DUTY, 0x8000u | duty_raw);
+  if (err == ESP_OK) vibration_off_at_ = now_ms + duration_ms;
+  return err;
+}
+
+void M5IOE1::tick(uint32_t now_ms) {
+  if (vibration_off_at_ != 0 && static_cast<int32_t>(now_ms - vibration_off_at_) >= 0)
+    stop_vibration();
+}
+
+esp_err_t M5IOE1::stop_vibration() {
+  if (!ready_) return ESP_ERR_INVALID_STATE;
+  const esp_err_t err = write_reg16(REG_PWM_DUTY, 0x0000);
+  // Keep the expired deadline on failure so tick() retries instead of leaving
+  // the motor running indefinitely after a transient I2C error.
+  if (err == ESP_OK) vibration_off_at_ = 0;
+  return err;
 }
 
 }  // namespace hgp
